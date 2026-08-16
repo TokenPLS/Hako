@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Upstream mihomo (core kernel behavior)
+    url: https://github.com/MetaCubeX/mihomo
+    about: Hako packages the mihomo kernel. Questions about core proxy/DNS/rule behavior that also affect stock mihomo are best raised upstream.
