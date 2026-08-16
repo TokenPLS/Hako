@@ -1,0 +1,110 @@
+package hako
+
+import (
+	"encoding/json"
+	"sync"
+
+	"github.com/TokenPLS/Hako/tunnel"
+	"github.com/TokenPLS/Hako/tunnel/statistic"
+)
+
+// command.go is the in-process control-plane surface: the NE
+// answers app queries by calling the statistic manager and proxy tables
+// directly and returning JSON, WITHOUT starting an HTTP/clash controller.
+// gomobile-safe: every getter returns a plain JSON string (no maps, slices,
+// or (string, error) across the boundary). The NE routes app requests here
+// via handleAppMessage.
+
+// StatusJSON reports lifecycle + routing mode: {"status","mode"}.
+func StatusJSON() string {
+	return mustJSON(map[string]string{
+		"status": tunnel.Status().String(),
+		"mode":   tunnel.Mode().String(),
+	})
+}
+
+// TrafficJSON reports headline traffic: per-second up/down (bytes/s, computed
+// by the manager's 1s ticker so Swift needs no timer) plus cumulative totals
+// and the core's RSS estimate.
+func TrafficJSON() string {
+	up, down := statistic.DefaultManager.Now()
+	upTotal, downTotal := statistic.DefaultManager.Total()
+	return mustJSON(map[string]int64{
+		"up":        up,
+		"down":      down,
+		"upTotal":   upTotal,
+		"downTotal": downTotal,
+		"memory":    MemoryFootprint(), // phys_footprint (jetsam metric)
+	})
+}
+
+// ConnectionsJSON returns the live connection snapshot (connections + totals +
+// memory), matching the clash /connections shape.
+func ConnectionsJSON() string {
+	return mustJSON(statistic.DefaultManager.Snapshot())
+}
+
+// ProxiesJSON returns every proxy and group keyed by name (clash /proxies
+// shape). Groups serialize with their members and current selection via each
+// proxy's MarshalJSON.
+func ProxiesJSON() string {
+	return mustJSON(map[string]any{"proxies": tunnel.Proxies()})
+}
+
+// ringBuffer keeps the last N log lines for the RecentLogsJSON getter
+// (diagnostics without device log capture).
+type ringBuffer struct {
+	mu    sync.Mutex
+	lines []string
+	max   int
+}
+
+const defaultLogMaxLines = 400
+
+func (r *ringBuffer) add(line string) {
+	r.mu.Lock()
+	r.lines = append(r.lines, line)
+	if len(r.lines) > r.max {
+		r.lines = r.lines[len(r.lines)-r.max:]
+	}
+	r.mu.Unlock()
+}
+
+func (r *ringBuffer) snapshot() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, len(r.lines))
+	copy(out, r.lines)
+	return out
+}
+
+func (r *ringBuffer) setMax(max int) {
+	if max <= 0 {
+		max = defaultLogMaxLines
+	}
+	r.mu.Lock()
+	r.max = max
+	if len(r.lines) > max {
+		r.lines = append([]string(nil), r.lines[len(r.lines)-max:]...)
+	}
+	r.mu.Unlock()
+}
+
+var recentLogs = &ringBuffer{max: defaultLogMaxLines}
+
+// RecentLogsJSON returns the last ~400 core log lines as a JSON array, newest
+// last. For in-app diagnostics.
+func RecentLogsJSON() string {
+	return mustJSON(recentLogs.snapshot())
+}
+
+// mustJSON marshals v, returning a JSON error object rather than failing the
+// boundary call (the getters never return an error type per gomobile rules).
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		eb, _ := json.Marshal(map[string]string{"error": err.Error()})
+		return string(eb)
+	}
+	return string(b)
+}
