@@ -1,0 +1,72 @@
+name: CI
+on:
+  push: { branches: [ main ] }
+  pull_request: {}
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        # Pin the development toolchain, not go.mod's minimum language version:
+        # the go1.20 fallback files (excluded by build tags on modern Go) fail
+        # vet under an old toolchain.
+        with: { go-version: '1.26.x' }
+      - run: go build ./...
+      - run: go vet ./...
+      # vet, not just build: `go build` skips _test.go, so this module's tests can stop
+      # compiling with nothing anywhere saying so. They did, and the export could not see
+      # it either until the same line was added there.
+      - run: cd bind/hako && go build ./... && go vet ./...
+
+  # The artifact this repository exists to produce. Runs on push rather than on
+  # every pull request: it is a five-slice gomobile build on a macOS runner, and
+  # the Linux job above already catches anything that stops compiling.
+  xcframework:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Tags, not just the tip. build_libbox derives the core version from
+          # `git describe --tags --match 'v*'`, and checkout's default shallow
+          # fetch brings none -- without this the build dies as
+          # `git describe: exit status 128` before compiling anything.
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with: { go-version: '1.26.x' }
+      - name: A v* tag has to exist
+        # Said here rather than left to the build, whose failure for this reason
+        # is an unexplained exit status 128 a hundred lines into gomobile output.
+        run: |
+          git describe --tags --abbrev=0 --match 'v*' >/dev/null 2>&1 || {
+            echo "No v* tag is reachable, so the core version cannot be derived."
+            echo "Tag a release (v<upstream>-hako.<n>) and push the tag."
+            exit 1
+          }
+      - name: Install the pinned gomobile fork
+        # The fork, at the pinned version: upstream gomobile does not build the
+        # Apple slice set this artifact ships.
+        run: |
+          go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+          go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
+      - name: Build Hako.xcframework
+        run: go run ./cmd/build_libbox -target apple
+      - name: Every Apple slice is present
+        # gomobile will happily emit a partial xcframework; an artifact missing
+        # the simulator slice cannot be built against in Xcode and nothing else
+        # here would notice.
+        run: |
+          for slice in ios-arm64 ios-arm64_x86_64-simulator macos-arm64_x86_64 \
+                       tvos-arm64 tvos-arm64_x86_64-simulator; do
+            test -d "Hako.xcframework/$slice" || { echo "missing slice: $slice"; exit 1; }
+          done
+          ls Hako.xcframework
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Hako.xcframework
+          path: Hako.xcframework
+          # ~450 MB per build. Kept briefly so a consumer can grab one without
+          # building it; a durable download belongs on a Release, attached to the
+          # tag it was cut from.
+          retention-days: 14

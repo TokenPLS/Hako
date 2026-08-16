@@ -1,0 +1,41 @@
+Hako — iOS/macOS SDK for the mihomo proxy kernel
+=================================================
+
+Copyright (C) 2026 The Hako Authors.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version. See the LICENSE file for the full GPLv3 text.
+
+This product is built on and statically links the mihomo proxy kernel:
+
+  mihomo — https://github.com/MetaCubeX/mihomo
+  Licensed under GPLv3. Copyright (C) the mihomo (Clash.Meta) authors.
+
+The Hako.xcframework redistributes the complete mihomo kernel and is
+therefore a derivative work licensed under GPLv3. Corresponding source is
+available at the project's repository at the released tag.
+
+Attribution for referenced implementations (GPLv3, SagerNet):
+
+  sing-box / sing-box-for-apple — https://github.com/SagerNet/sing-box
+  The Network Extension utun handoff (openTun) and the libbox binding API
+  surface were used as design references for the Swift extension and the
+  Go binding layer, respectively. `common/networkquality` from commit
+  4bccd6fae19526425acf76efc263333c7aea6fce is adapted and statically linked
+  in Hako's internal network-quality package under GPL-3.0-or-later.
+
+Hako does not use the "sing-box" name or trademark and does not imply any
+association with SagerNet. "Hako" is this project's own name; the upstream
+kernel name "mihomo" is retained as required for GPLv3 attribution.
+
+gomobile generator and generated bridge runtime (BSD-style):
+
+  github.com/sagernet/gomobile — the gomobile/gobind generator commands run
+  only at build time and are not linked as executables. Their generated
+  Objective-C/Go bridge runtime and glue are statically present in the
+  XCFramework (including go_seq_* and GoSeqRef symbols), so this attribution
+  accompanies the product.
+
+See THIRD_PARTY_LICENSES.md for the dependency license list.
