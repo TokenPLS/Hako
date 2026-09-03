@@ -1,0 +1,130 @@
+package dns
+
+import (
+	"context"
+	"net"
+
+	"github.com/TokenPLS/Hako/common/sockopt"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
+
+	D "github.com/miekg/dns"
+)
+
+var (
+	address string
+	server  = &Server{}
+
+	dnsDefaultTTL uint32 = 600
+)
+
+type Server struct {
+	service   resolver.Service
+	tcpServer *D.Server
+	udpServer *D.Server
+}
+
+type serverHandler struct {
+	*Server
+	isUDP bool
+}
+
+// ServeDNS implement D.Handler ServeDNS
+func (s serverHandler) ServeDNS(w D.ResponseWriter, r *D.Msg) {
+	msg, err := s.service.ServeMsg(context.Background(), r)
+	if err != nil {
+		m := new(D.Msg)
+		m.SetRcode(r, D.RcodeServerFailure)
+		// does not matter if this write fails
+		w.WriteMsg(m)
+		return
+	}
+	if s.isUDP {
+		// RFC 6891: fit the reply into the client's advertised buffer size,
+		// setting the TC bit if records must be dropped; 512 when no OPT present
+		msg.Truncate(resolver.RequestUDPSize(r))
+	}
+	msg.Compress = true
+	w.WriteMsg(msg)
+}
+
+func (s *Server) UDPHandler() D.Handler {
+	return serverHandler{Server: s, isUDP: true}
+}
+
+func (s *Server) TCPHandler() D.Handler {
+	return serverHandler{Server: s, isUDP: false}
+}
+
+func (s *Server) SetService(service resolver.Service) {
+	s.service = service
+}
+
+func ReCreateServer(addr string, lc C.InboundListenConfig, service resolver.Service) {
+	if addr == address && service != nil {
+		server.SetService(service)
+		return
+	}
+
+	if server.tcpServer != nil {
+		_ = server.tcpServer.Shutdown()
+		server.tcpServer = nil
+	}
+
+	if server.udpServer != nil {
+		_ = server.udpServer.Shutdown()
+		server.udpServer = nil
+	}
+
+	server.service = nil
+	address = ""
+
+	if addr == "" || lc == nil || service == nil {
+		return
+	}
+
+	var err error
+	defer func() {
+		if err != nil {
+			log.Errorln("Start DNS server error: %s", err.Error())
+		}
+	}()
+
+	_, port, err := net.SplitHostPort(addr)
+	if port == "0" || port == "" || err != nil {
+		return
+	}
+
+	address = addr
+	server = &Server{service: service}
+
+	go func() {
+		p, err := lc.ListenPacket(context.Background(), "udp", addr)
+		if err != nil {
+			log.Errorln("Start DNS server(UDP) error: %s", err.Error())
+			return
+		}
+
+		if err := sockopt.UDPReuseaddr(p); err != nil {
+			log.Warnln("Failed to Reuse UDP Address: %s", err)
+		}
+
+		log.Infoln("DNS server(UDP) listening at: %s", p.LocalAddr().String())
+		server.udpServer = &D.Server{Addr: addr, PacketConn: p, Handler: server.UDPHandler()}
+		_ = server.udpServer.ActivateAndServe()
+	}()
+
+	go func() {
+		l, err := lc.Listen(context.Background(), "tcp", addr)
+		if err != nil {
+			log.Errorln("Start DNS server(TCP) error: %s", err.Error())
+			return
+		}
+
+		log.Infoln("DNS server(TCP) listening at: %s", l.Addr().String())
+		server.tcpServer = &D.Server{Addr: addr, Listener: l, Handler: server.TCPHandler()}
+		_ = server.tcpServer.ActivateAndServe()
+	}()
+
+}

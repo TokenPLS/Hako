@@ -1,0 +1,115 @@
+{
+ "source": {
+  "application": "/Applications/Shadowrocket.app",
+  "version": "2.2.90",
+  "build": "3378",
+  "method": "DLWServer +configWithUrlString:error: -> +urlStringWithConfig:",
+  "note": "Inputs and the exporter reply for each. Addresses, UUIDs and credentials are synthetic (the redaction rule)."
+ },
+ "pairs": [
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?security=tls#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?security=tls&peer=s.example.invalid#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&peer=s.example.invalid"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?obfs=websocket&obfsParam=h.example.invalid&path=/w#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?path=/w&remarks=m&obfsParam=h.example.invalid"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?tfo=1#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tfo=1"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?allowInsecure=1#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&allowInsecure=1"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?alpn=h2#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&alpn=h2"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?security=reality&pbk=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA&sid=ab#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&pbk=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA&sid=ab"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?flow=xtls-rprx-vision&security=tls#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&xtls=2"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?fingerprint=chrome#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&fingerprint=chrome"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?mport=40000-50000#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQwMDAwLTUwMDAw?remarks=m"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?udp=1#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&udp=1"
+  },
+  {
+   "input": "vless://11111111-2222-3333-4444-555555555555@example.invalid:443?type=grpc&serviceName=gs#m",
+   "exported": "vless://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?path=gs&remarks=m&obfs=grpc"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?security=tls#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?security=tls&peer=s.example.invalid#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&peer=s.example.invalid&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?obfs=websocket&obfsParam=h.example.invalid&path=/w#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?path=/w&remarks=m&obfsParam=h.example.invalid&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?tfo=1#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tfo=1&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?allowInsecure=1#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&allowInsecure=1&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?alpn=h2#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&alpn=h2&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?security=reality&pbk=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA&sid=ab#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&alterId=0&pbk=AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA&sid=ab"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?flow=xtls-rprx-vision&security=tls#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&tls=1&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?fingerprint=chrome#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&alterId=0&fingerprint=chrome"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?mport=40000-50000#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQwMDAwLTUwMDAw?remarks=m&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?udp=1#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=m&udp=1&alterId=0"
+  },
+  {
+   "input": "vmess://11111111-2222-3333-4444-555555555555@example.invalid:443?type=grpc&serviceName=gs#m",
+   "exported": "vmess://YXV0bzoxMTExMTExMS0yMjIyLTMzMzMtNDQ0NC01NTU1NTU1NTU1NTVAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?path=gs&remarks=m&obfs=grpc&alterId=0"
+  }
+ ]
+}

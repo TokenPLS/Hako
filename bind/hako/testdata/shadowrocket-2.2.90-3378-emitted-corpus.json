@@ -1,0 +1,175 @@
+{
+ "source": {
+  "application": "/Applications/Shadowrocket.app",
+  "version": "2.2.90",
+  "build": "3378",
+  "method": "DLWServer +configWithUrlString:error: -> +urlStringWithConfig:; every line is the exporter reply, addresses RFC 5737 / .invalid, credentials synthetic",
+  "expectations": {
+   "accepted": "imports as one proxy",
+   "coreUnsupported": "mihomo has no such outbound; the registry says so",
+   "rejected": "the exporter reply itself lacks what the kernel requires; refusing is correct"
+  }
+ },
+ "records": [
+  {
+   "exported": "anytls://sample@198.51.100.50:443?peer=sni.invalid&insecure=1&alpn=h2&udp=1#M-anytls",
+   "expect": "accepted"
+  },
+  {
+   "exported": "anytls://sample@198.51.100.50:443#anytls",
+   "expect": "accepted"
+  },
+  {
+   "exported": "http2://c2FtcGxlQDE5OC41MS4xMDAuNTA6NDQz#http2",
+   "expect": "coreUnsupported"
+  },
+  {
+   "exported": "http3://c2FtcGxlQDE5OC41MS4xMDAuNTA6NDQz#http3",
+   "expect": "coreUnsupported"
+  },
+  {
+   "exported": "hysteria://198.51.100.50:443?auth=authstr&peer=sni.invalid&insecure=1&upmbps=50&downmbps=100&alpn=h2&protocol=udp#M-hy",
+   "expect": "accepted"
+  },
+  {
+   "exported": "hysteria://198.51.100.50:443?auth=sample&protocol=none#hy",
+   "expect": "rejected"
+  },
+  {
+   "exported": "hysteria://198.51.100.50:443?auth=sample&protocol=none#hysteria",
+   "expect": "rejected"
+  },
+  {
+   "exported": "hysteria2://sample@198.51.100.50:443?peer=sni.invalid&insecure=1&alpn=h2&obfs=salamander&obfs-password=obfspw#M-hy2",
+   "expect": "accepted"
+  },
+  {
+   "exported": "hysteria2://sample@198.51.100.50:443#hy2",
+   "expect": "accepted"
+  },
+  {
+   "exported": "hysteria2://sample@198.51.100.50:443#hysteria2",
+   "expect": "accepted"
+  },
+  {
+   "exported": "juicity://sample:@198.51.100.50:443?congestion_control=none#juicity",
+   "expect": "coreUnsupported"
+  },
+  {
+   "exported": "lua://OkBzYW1wbGVAMTk4LjUxLjEwMC41MDo0NDM?remarks=lua",
+   "expect": "coreUnsupported"
+  },
+  {
+   "exported": "masque://198.51.100.50:443?privateKey=sample#masque",
+   "expect": "rejected"
+  },
+  {
+   "exported": "mierus://sample:@198.51.100.50?port=443&profile=mierus",
+   "expect": "rejected"
+  },
+  {
+   "exported": "openconnect://sample:@198.51.100.50:443#openconnect",
+   "expect": "coreUnsupported"
+  },
+  {
+   "exported": "relay://c2FtcGxlQDE5OC41MS4xMDAuNTA6NDQz?remarks=relay",
+   "expect": "coreUnsupported"
+  },
+  {
+   "exported": "snell://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpAMTk4LjUxLjEwMC41MDo0NDM?security=1&alpn=h2&version=4&reuse=1&udp=1&pbk=pskvalue#M-snell",
+   "expect": "accepted"
+  },
+  {
+   "exported": "snell://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpAMTk4LjUxLjEwMC41MDo0NDM?version=none#snell",
+   "expect": "rejected"
+  },
+  {
+   "exported": "socks://dXNlcjpzYW1wbGVAMTk4LjUxLjEwMC41MDoxMDgw?remarks=M-socks5&tls=1&peer=sni.invalid&allowInsecure=1&alpn=h2&udp=1",
+   "expect": "accepted"
+  },
+  {
+   "exported": "socks://MTk4LjUxLjEwMC41MDo0NDM?remarks=socks",
+   "expect": "accepted"
+  },
+  {
+   "exported": "socks://MTk4LjUxLjEwMC41MDo0NDM?remarks=socks5",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ss://YWVzLTEyOC1nY206c2FtcGxlQDE5OC41MS4xMDAuNTA6ODM4OA#ss",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ss://YWVzLTI1Ni1nY206c2FtcGxl@198.51.100.50:8388?plugin=obfs-local;obfs%3Dtls;obfs-host%3Dsni.invalid;obfs-uri%3D/&security=1&alpn=h2#M-ss",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ssh://user:sample@198.51.100.50:22#M-ssh",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ssh://user:sample@198.51.100.50:22#ssh",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ssocks://MTk4LjUxLjEwMC41MDo0NDM?remarks=ssocks",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ssocks://MTk4LjUxLjEwMC41MDo0NDM?remarks=ssocks5",
+   "expect": "accepted"
+  },
+  {
+   "exported": "ssr://MTk4LjUxLjEwMC41MDo4Mzg4Om9yaWdpbjphZXMtMTI4LWNmYjpwbGFpbjpjMkZ0Y0d4bC8_cmVtYXJrcz1jM055JnByb3RvcGFyYW09Jm9iZnNwYXJhbT0",
+   "expect": "accepted"
+  },
+  {
+   "exported": "trojan://sample@198.51.100.50:443?allowInsecure=1&peer=sni.invalid&mux=1&alpn=h2&plugin=obfs-local;obfs%3Dwebsocket;obfs-host%3Dsni.invalid;obfs-uri%3D/tg#M-trojango",
+   "expect": "accepted"
+  },
+  {
+   "exported": "trojan://sample@198.51.100.50:443?allowInsecure=1&peer=sni.invalid&mux=1&alpn=h2#M-trojan",
+   "expect": "accepted"
+  },
+  {
+   "exported": "trojan://sample@198.51.100.50:443#trojan",
+   "expect": "accepted"
+  },
+  {
+   "exported": "trojan://sample@198.51.100.50:443#trojan-go",
+   "expect": "accepted"
+  },
+  {
+   "exported": "tuic://:@a71f3b5b-6657-435b-ba6e-0dfbf8fe984f:0?congestion_control=none",
+   "expect": "rejected"
+  },
+  {
+   "exported": "tuic://:@a71f3b5b-6657-435b-ba6e-0dfbf8fe984fstion_control=bbr&udp_relay_mode=quic:0?congestion_control=none#M-tuic",
+   "expect": "rejected"
+  },
+  {
+   "exported": "vless://YXV0bzphNzFmM2I1Yi02NjU3LTQzNWItYmE2ZS0wZGZiZjhmZTk4NGZAMTk4LjUxLjEwMC41MDo0NDM?path=gsvc&remarks=M-vless&obfs=grpc&tls=1&peer=sni.invalid&allowInsecure=1&alpn=h2&udp=1&mux=1&xtls=2&fingerprint=chrome",
+   "expect": "accepted"
+  },
+  {
+   "exported": "vless://YXV0bzphNzFmM2I1Yi02NjU3LTQzNWItYmE2ZS0wZGZiZjhmZTk4NGZAMTk4LjUxLjEwMC41MDo0NDM?remarks=vless&tls=1",
+   "expect": "accepted"
+  },
+  {
+   "exported": "vmess://YXV0bzphNzFmM2I1Yi02NjU3LTQzNWItYmE2ZS0wZGZiZjhmZTk4NGZAMTk4LjUxLjEwMC41MDo0NDM?path=/&remarks=vmess&alterId=0",
+   "expect": "accepted"
+  },
+  {
+   "exported": "vmess://YXV0bzphNzFmM2I1Yi02NjU3LTQzNWItYmE2ZS0wZGZiZjhmZTk4NGZAMTk4LjUxLjEwMC41MDo0NDM?path=/ws&remarks=M-vmess&obfsParam=sni.invalid&tls=1&peer=sni.invalid&allowInsecure=1&alpn=h2&udp=1&mux=1&alterId=0",
+   "expect": "accepted"
+  },
+  {
+   "exported": "wg://198.51.100.50:51820?publicKey=cHVia2V5cHVia2V5cHVia2V5cHVia2V5cHVia2V5MDA%3D&privateKey=cHJpdmtleXByaXZrZXlwcml2a2V5cHJpdmtleXByaXYwMA%3D%3D&ip=10.0.0.2/32#wg",
+   "expect": "accepted"
+  },
+  {
+   "exported": "wg://198.51.100.50:51820?publicKey=cHVia2V5cHVia2V5cHVia2V5cHVia2V5cHVia2V5MDA%3D&privateKey=cHJpdmtleXByaXZrZXlwcml2a2V5cHJpdmtleXByaXYwMA%3D%3D&ip=10.0.0.2/32#wireguard",
+   "expect": "accepted"
+  }
+ ]
+}

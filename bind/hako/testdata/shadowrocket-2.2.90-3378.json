@@ -1,0 +1,296 @@
+{
+ "source": {
+  "application": "/Applications/Shadowrocket.app",
+  "version": "2.2.90",
+  "build": "3378",
+  "binarySHA256": "56682316baf087eff7f784f72523f39a18be4facfb0ab30e771ac5b3d0577015",
+  "method": "DLWServer +configWithUrlString:error: followed by +urlStringWithConfig: in the copied, ad-hoc-signed local arm64 image"
+ },
+ "fixtures": [
+  {
+   "canonicalType": "vmess",
+   "variant": "base64-json-import-normalized-by-shadowrocket-exporter",
+   "sourceInput": "vmess://eyJ2IjoiMiIsInBzIjoidm1lc3MtanNvbiIsImFkZCI6ImV4YW1wbGUuaW52YWxpZCIsInBvcnQiOiI0NDMiLCJpZCI6ImI4MzEzODFkLTYzMjQtNGQ1My1hZDRmLThjZGE0OGIzMDgxMSIsImFpZCI6IjAiLCJzY3kiOiJhdXRvIiwibmV0Ijoid3MiLCJ0eXBlIjoibm9uZSIsImhvc3QiOiJjZG4uZXhhbXBsZS5pbnZhbGlkIiwicGF0aCI6Ii9yYXkiLCJ0bHMiOiJ0bHMiLCJzbmkiOiJzbmkuZXhhbXBsZS5pbnZhbGlkIiwiYWxwbiI6ImgyLGh0dHAvMS4xIn0=",
+   "exported": "vmess://YXV0bzpiODMxMzgxZC02MzI0LTRkNTMtYWQ0Zi04Y2RhNDhiMzA4MTFAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?path=/ray&remarks=vmess-json&obfsParam=cdn.example.invalid&obfs=websocket&tls=1&peer=sni.example.invalid&alpn=h2,http/1.1&alterId=0",
+   "expected": {
+    "type": "vmess",
+    "server": "example.invalid",
+    "port": 443,
+    "network": "ws",
+    "tls": true,
+    "servername": "sni.example.invalid",
+    "alpn": [
+     "h2",
+     "http/1.1"
+    ],
+    "alterId": 0,
+    "ws-opts.path": "/ray",
+    "ws-opts.headers.Host": "cdn.example.invalid"
+   }
+  },
+  {
+   "canonicalType": "http",
+   "variant": "https-encoded-authority",
+   "exported": "https://dXNlcjpzZWNyZXRAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?tfo=1&allowInsecure=1#http",
+   "expected": {
+    "type": "http",
+    "server": "example.invalid",
+    "port": "443",
+    "tls": true,
+    "skip-cert-verify": true,
+    "tfo": true
+   }
+  },
+  {
+   "canonicalType": "socks5",
+   "variant": "socks-alias-encoded-authority",
+   "exported": "socks://dXNlcjpzZWNyZXRAZXhhbXBsZS5pbnZhbGlkOjEwODA?remarks=socks5&tls=1&allowInsecure=1&tfo=1",
+   "expected": {
+    "type": "socks5",
+    "server": "example.invalid",
+    "port": "1080",
+    "tls": true,
+    "skip-cert-verify": true,
+    "tfo": true
+   }
+  },
+  {
+   "canonicalType": "ssr",
+   "variant": "base64-payload",
+   "exported": "ssr://ZXhhbXBsZS5pbnZhbGlkOjQ0MzpvcmlnaW46YWVzLTI1Ni1jZmI6cGxhaW46YzJWamNtVjAvP3JlbWFya3M9YzNKeiZwcm90b3BhcmFtPSZvYmZzcGFyYW09",
+   "expected": {
+    "type": "ssr",
+    "server": "example.invalid",
+    "port": "443",
+    "cipher": "aes-256-cfb",
+    "protocol": "origin",
+    "obfs": "plain"
+   }
+  },
+  {
+   "canonicalType": "trojan",
+   "variant": "websocket-plugin-and-tls",
+   "exported": "trojan://secret@example.invalid:443?allowInsecure=1&peer=sni.example.invalid&tfo=1&alpn=h2,http/1.1&plugin=obfs-local;obfs%3Dwebsocket;obfs-host%3Dcdn.example.invalid;obfs-uri%3D/ray#trojan",
+   "expected": {
+    "type": "trojan",
+    "server": "example.invalid",
+    "port": "443",
+    "sni": "sni.example.invalid",
+    "skip-cert-verify": true,
+    "network": "ws",
+    "ws-opts.path": "/ray",
+    "ws-opts.headers.Host": "cdn.example.invalid",
+    "alpn": [
+     "h2",
+     "http/1.1"
+    ],
+    "tfo": true
+   }
+  },
+  {
+   "canonicalType": "ss",
+   "variant": "simple-obfs-plugin",
+   "exported": "ss://YWVzLTEyOC1nY206c2VjcmV0@example.invalid:8388?plugin=obfs-local;obfs%3Dtls;obfs-host%3Dcdn.example.invalid;obfs-uri%3D/#ss",
+   "expected": {
+    "type": "ss",
+    "server": "example.invalid",
+    "port": "8388",
+    "cipher": "aes-128-gcm",
+    "plugin": "obfs",
+    "plugin-opts.mode": "tls",
+    "plugin-opts.host": "cdn.example.invalid"
+   }
+  },
+  {
+   "canonicalType": "snell",
+   "variant": "encoded-credentials-and-simple-obfs",
+   "exported": "snell://Y2hhY2hhMjAtaWV0Zi1wb2x5MTMwNTpzZWNyZXQ@example.invalid:443?plugin=obfs-local;obfs%3Dtls;obfs-host%3Dcdn.example.invalid;obfs-uri%3D/&tfo=1&version=4&udp=1#snell",
+   "expected": {
+    "type": "snell",
+    "server": "example.invalid",
+    "port": 443,
+    "psk": "secret",
+    "version": 4,
+    "udp": true,
+    "tfo": true,
+    "obfs-opts.mode": "tls",
+    "obfs-opts.host": "cdn.example.invalid"
+   }
+  },
+  {
+   "canonicalType": "vless",
+   "variant": "legacy-authority-reality-vision",
+   "sourceInput": "vless://a1b2c3d4-eacc-4433-981b-7e5f9a8b0000@example.invalid:443?encryption=none&security=reality&type=tcp&sni=sni.example.invalid&fp=chrome&pbk=ppQ9FwLrLIa0AOrp1WvcyiaQ37vg2WSy_CD4bIdiTUw&sid=6ba85179f3a2b4c5&flow=xtls-rprx-vision&hpkp=65b3acd7db555768304a16abb6f4366c1a0c0bb5cec81429617f0150d7d66726#vless-reality",
+   "exported": "vless://bm9uZTphMWIyYzNkNC1lYWNjLTQ0MzMtOTgxYi03ZTVmOWE4YjAwMDBAZXhhbXBsZS5pbnZhbGlkOjQ0Mw?remarks=vless-reality&tls=1&peer=sni.example.invalid&xtls=2&pbk=ppQ9FwLrLIa0AOrp1WvcyiaQ37vg2WSy_CD4bIdiTUw&sid=6ba85179f3a2b4c5&hpkp=65b3acd7db555768304a16abb6f4366c1a0c0bb5cec81429617f0150d7d66726&fingerprint=chrome",
+   "expected": {
+    "type": "vless",
+    "server": "example.invalid",
+    "port": "443",
+    "uuid": "a1b2c3d4-eacc-4433-981b-7e5f9a8b0000",
+    "tls": true,
+    "flow": "xtls-rprx-vision",
+    "servername": "sni.example.invalid",
+    "client-fingerprint": "chrome",
+    "fingerprint": "65b3acd7db555768304a16abb6f4366c1a0c0bb5cec81429617f0150d7d66726",
+    "reality-opts.public-key": "ppQ9FwLrLIa0AOrp1WvcyiaQ37vg2WSy_CD4bIdiTUw",
+    "reality-opts.short-id": "6ba85179f3a2b4c5"
+   }
+  },
+  {
+   "canonicalType": "hysteria",
+   "variant": "shadowrocket-query-dialect",
+   "exported": "hysteria://example.invalid:443?auth=secret&peer=sni.example.invalid&insecure=1&upmbps=10&downmbps=20&alpn=h3&obfs=xplus&protocol=none&fastopen=1#hysteria",
+   "expected": {
+    "type": "hysteria",
+    "server": "example.invalid",
+    "port": "443",
+    "auth_str": "secret",
+    "sni": "sni.example.invalid",
+    "skip-cert-verify": true,
+    "up": "10",
+    "down": "20",
+    "alpn": [
+     "h3"
+    ],
+    "obfs": "xplus",
+    "tfo": true
+   },
+   "note": "The exporter writes protocol=none when the user set none. mihomo accepts it at parse time and then fails at dial time with `unsupported protocol: none` (transport/hysteria/transport/client.go), so the importer drops the placeholder and lets DefaultProtocol apply. The earlier expectation pinned the latent bug."
+  },
+  {
+   "canonicalType": "hysteria2",
+   "variant": "shadowrocket-query-dialect",
+   "exported": "hysteria2://secret@example.invalid:443?peer=sni.example.invalid&insecure=1&alpn=h3&obfs=salamander&obfs-password=obfs-secret&fastopen=1&upmbps=10&downmbps=20#hysteria2",
+   "expected": {
+    "type": "hysteria2",
+    "server": "example.invalid",
+    "port": "443",
+    "password": "secret",
+    "sni": "sni.example.invalid",
+    "skip-cert-verify": true,
+    "up": "10",
+    "down": "20",
+    "alpn": [
+     "h3"
+    ],
+    "obfs": "salamander",
+    "obfs-password": "obfs-secret",
+    "tfo": true
+   }
+  },
+  {
+   "canonicalType": "tuic",
+   "variant": "v5-and-shadowrocket-aliases",
+   "exported": "tuic://00000000-0000-0000-0000-000000000001:secret@example.invalid:443?sni=sni.example.invalid&congestion_control=bbr&udp_relay_mode=native&alpn=h3&allow_insecure=1#tuic",
+   "expected": {
+    "type": "tuic",
+    "server": "example.invalid",
+    "port": "443",
+    "uuid": "00000000-0000-0000-0000-000000000001",
+    "password": "secret",
+    "sni": "sni.example.invalid",
+    "skip-cert-verify": true,
+    "congestion-controller": "bbr",
+    "udp-relay-mode": "native",
+    "alpn": [
+     "h3"
+    ]
+   }
+  },
+  {
+   "canonicalType": "wireguard",
+   "variant": "wg-alias",
+   "exported": "wg://example.invalid:51820?publicKey=AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%3D&privateKey=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA%3D&ip=10.0.0.2/32&mtu=1280&dns=1.1.1.1&keepalive=25&reserved=1,2,3#wireguard",
+   "expected": {
+    "type": "wireguard",
+    "server": "example.invalid",
+    "port": 51820,
+    "ip": "10.0.0.2/32",
+    "mtu": 1280,
+    "dns": [
+     "1.1.1.1"
+    ],
+    "persistent-keepalive": 25,
+    "reserved": "AQID"
+   }
+  },
+  {
+   "canonicalType": "masque",
+   "variant": "p256-keys",
+   "exported": "masque://example.invalid:443?publicKey=MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEr%2BS%2B1lurxAxUbuPi4RhUv/aZ5CVG/Br79BRi0b%2BQX%2B7oBc5Yx2eQ7OMYFGQ6%2BlqPLWkEr1pl1nZg%2BRoEzg1Jqg%3D%3D&privateKey=MHcCAQEEIIDzwMdDFdFe3jj4vanTuI2sdBFaUjjPnV/68XaVWfwfoAoGCCqGSM49AwEHoUQDQgAEr%2BS%2B1lurxAxUbuPi4RhUv/aZ5CVG/Br79BRi0b%2BQX%2B7oBc5Yx2eQ7OMYFGQ6%2BlqPLWkEr1pl1nZg%2BRoEzg1Jqg%3D%3D&ip=10.0.0.2/32&mtu=1280&dns=1.1.1.1&sni=sni.example.invalid#masque",
+   "expected": {
+    "type": "masque",
+    "server": "example.invalid",
+    "port": 443,
+    "ip": "10.0.0.2/32",
+    "mtu": 1280,
+    "dns": [
+     "1.1.1.1"
+    ],
+    "sni": "sni.example.invalid"
+   }
+  },
+  {
+   "canonicalType": "ssh",
+   "variant": "password",
+   "exported": "ssh://user:secret@example.invalid:22#ssh",
+   "expected": {
+    "type": "ssh",
+    "server": "example.invalid",
+    "port": 22,
+    "username": "user",
+    "password": "secret"
+   }
+  },
+  {
+   "canonicalType": "anytls",
+   "variant": "tls-children",
+   "exported": "anytls://secret@example.invalid:443?peer=sni.example.invalid&insecure=1&alpn=h2,http/1.1&fastopen=1&hpkp=65b3acd7db555768304a16abb6f4366c1a0c0bb5cec81429617f0150d7d66726#anytls",
+   "expected": {
+    "type": "anytls",
+    "server": "example.invalid",
+    "port": "443",
+    "password": "secret",
+    "sni": "sni.example.invalid",
+    "skip-cert-verify": true,
+    "alpn": [
+     "h2",
+     "http/1.1"
+    ],
+    "fingerprint": "65b3acd7db555768304a16abb6f4366c1a0c0bb5cec81429617f0150d7d66726",
+    "tfo": true
+   }
+  },
+  {
+   "canonicalType": "trusttunnel",
+   "variant": "official-tlv",
+   "exported": "tt://?AAEBAQ9leGFtcGxlLmludmFsaWQCE2V4YW1wbGUuaW52YWxpZDo0NDMFBHVzZXIGBnNlY3JldAMTc25pLmV4YW1wbGUuaW52YWxpZAwOc3ItdHJ1c3R0dW5uZWwHAQE",
+   "expected": {
+    "type": "trusttunnel",
+    "server": "example.invalid",
+    "port": 443,
+    "username": "user",
+    "password": "secret",
+    "sni": "sni.example.invalid",
+    "skip-cert-verify": true,
+    "alpn": [
+     "h2"
+    ]
+   }
+  },
+  {
+   "canonicalType": "mieru",
+   "variant": "transport-and-traffic-pattern",
+   "exported": "mierus://user:secret@example.invalid?transport=tcp&port=443&profile=mieru&traffic-pattern=CCoQARoECAEQCiIYCAMQASoIMDAwMTAyMDMqCDA0MDUwNjA3",
+   "expected": {
+    "type": "mieru",
+    "server": "example.invalid",
+    "port": 443,
+    "username": "user",
+    "password": "secret",
+    "transport": "TCP",
+    "traffic-pattern": "CCoQARoECAEQCiIYCAMQASoIMDAwMTAyMDMqCDA0MDUwNjA3"
+   }
+  }
+ ]
+}

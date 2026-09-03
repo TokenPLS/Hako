@@ -1,0 +1,36 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/*
+
+# Test binary / coverage
+*.test
+*.out
+
+# go mod vendor
+vendor
+
+# IDE
+.idea/*
+.vscode/
+.fleet/
+
+# macOS
+.DS_Store
+
+# test cache
+test/config/cache*
+/output
+
+# gomobile bind artifact (see `make lib_apple`)
+/Hako.xcframework/
+
+# Release packaging output
+/dist/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

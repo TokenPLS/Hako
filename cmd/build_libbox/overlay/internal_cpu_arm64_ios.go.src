@@ -1,0 +1,30 @@
+//go:build arm64 && ios
+
+package cpu
+
+// Replaces Go's cpu_arm64_other.go for the iOS family at build time (cmd/build_libbox
+// applies it through `go build -overlay`). Upstream leaves osInit empty on GOOS=ios, so
+// HasAES, HasPMULL, HasSHA1 and HasSHA2 stay false and AES-GCM runs through the pure-Go
+// path -- a quarter of the packet tunnel's CPU under load. The
+// darwin file that macOS builds get assumes these four from the M1 baseline; every
+// arm64 Apple SoC since the A7 implements the ARMv8.0 Cryptography Extensions, which
+// covers the A9 that iOS 15 still runs and the A8 in the Apple TV HD that tvOS 17 runs.
+//
+// Nothing else is asserted: ARMv8.1 atomics, SHA-512, SHA-3 and DIT are absent on
+// those oldest devices, and the Go runtime would fault on an instruction it was
+// promised. Detecting them needs sysctl, which internal/cpu only wires for macOS.
+func osInit() {
+	hakoAppleCPUOverlayMarker()
+	ARM64.HasAES = true
+	ARM64.HasPMULL = true
+	ARM64.HasSHA1 = true
+	ARM64.HasSHA2 = true
+}
+
+// hakoAppleCPUOverlayMarker exists so the finished slice can prove the overlay was
+// compiled in: a build that bypassed it links without a word, and go build ignores an
+// -overlay whose key names another toolchain's file. build_libbox asks nm for this
+// symbol in every iOS-family slice and refuses to hand over one without it.
+//
+//go:noinline
+func hakoAppleCPUOverlayMarker() {}
