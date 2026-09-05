@@ -54,6 +54,10 @@ type evidence struct {
 	Selector string `json:"selector"`
 	Path     string `json:"path,omitempty"`
 	Kind     string `json:"kind"` // cleared | forced | reject
+	// Guarded: the assignment sits inside an if whose condition reads the field it writes,
+	// so it decides on the user's value instead of overwriting it blind. Inventory consumers
+	// accept "default" and "conditional" dispositions only for guarded assignments.
+	Guarded  bool   `json:"guarded"`
 	Value    string `json:"value,omitempty"`
 	File     string `json:"file"`
 	Line     int    `json:"line"`
@@ -366,6 +370,7 @@ func (g *generator) assignEvidence(file, root string, flatten bool, chainPrefix 
 			Selector: strings.Join(chain, "."),
 			Path:     path,
 			Kind:     assignKind(as.Lhs[0], as.Rhs[0], guarded),
+			Guarded:  guarded,
 			Value:    g.renderNode(fset, as.Rhs[0]),
 			File:     file,
 			Line:     fset.Position(as.Pos()).Line,
