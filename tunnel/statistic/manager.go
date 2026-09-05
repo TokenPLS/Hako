@@ -47,8 +47,16 @@ type Manager struct {
 	proxyDownloadBlip  atomic.Int64
 	proxyUploadTotal   atomic.Int64
 	proxyDownloadTotal atomic.Int64
-	pid                int32
-	memory             uint64
+	// Session-long buckets the widget reads; the proxy bucket is the pair above.
+	directUploadTotal   atomic.Int64
+	directDownloadTotal atomic.Int64
+	rejectUploadTotal   atomic.Int64
+	rejectDownloadTotal atomic.Int64
+	opened              atomic.Int64
+	active              atomic.Int64
+	rejected            atomic.Int64
+	pid                 int32
+	memory              uint64
 
 	// lastReadAt is when a caller last asked for a rate, as Unix nanoseconds. The sampler
 	// stops when nobody has asked recently and the next read wakes it. See handle().
@@ -61,7 +69,9 @@ func (m *Manager) Join(c Tracker) {
 }
 
 func (m *Manager) Leave(c Tracker) {
-	m.connections.Delete(c.ID())
+	if _, present := m.connections.LoadAndDelete(c.ID()); present {
+		m.noteLeave()
+	}
 }
 
 func (m *Manager) Get(id string) (c Tracker) {
@@ -85,35 +95,120 @@ func (m *Manager) Range(f func(c Tracker) bool) {
 // egress adapter's type is not reachable from this package without an import
 // cycle, so type-exact classification would have to be threaded from the dial
 // site.
-var reservedNonProxyOutbounds = map[string]struct{}{
-	"DIRECT":      {},
-	"COMPATIBLE":  {},
-	"REJECT":      {},
-	"REJECT-DROP": {},
-	"PASS":        {},
+// OutboundBucket is where a connection's bytes are counted by the outbound it finally
+// left through: a real proxy, the device's own network, or nowhere. It is decided once,
+// when the tracker is built, from the outbound's name -- the reserved names are the
+// built-in egresses, everything else is a proxy -- which is the same line the proxy-only
+// counters have drawn since, so a widget reading the proxy bucket reads the
+// figure the release evidence reads. A user-defined outbound of type direct with a name
+// of its own counts as a proxy here, exactly as it does there.
+type OutboundBucket uint8
+
+const (
+	BucketProxy OutboundBucket = iota
+	BucketDirect
+	BucketReject
+)
+
+var reservedOutboundBuckets = map[string]OutboundBucket{
+	"DIRECT":      BucketDirect,
+	"COMPATIBLE":  BucketDirect,
+	"PASS":        BucketDirect,
+	"REJECT":      BucketReject,
+	"REJECT-DROP": BucketReject,
+}
+
+// BucketForOutbound names the bucket a final outbound's bytes and connection belong to.
+func BucketForOutbound(finalOutbound string) OutboundBucket {
+	if bucket, reserved := reservedOutboundBuckets[finalOutbound]; reserved {
+		return bucket
+	}
+	return BucketProxy
 }
 
 func isProxyOutbound(finalOutbound string) bool {
-	_, reserved := reservedNonProxyOutbounds[finalOutbound]
-	return !reserved
+	return BucketForOutbound(finalOutbound) == BucketProxy
 }
 
+// PushUploaded counts bytes by outbound name. Trackers decide the bucket once and call
+// pushUploaded; this entry point stays for callers that only hold a name.
 func (m *Manager) PushUploaded(finalOutbound string, size int64) {
-	if isProxyOutbound(finalOutbound) {
+	m.pushUploaded(BucketForOutbound(finalOutbound), size)
+}
+
+func (m *Manager) PushDownloaded(finalOutbound string, size int64) {
+	m.pushDownloaded(BucketForOutbound(finalOutbound), size)
+}
+
+func (m *Manager) pushUploaded(bucket OutboundBucket, size int64) {
+	switch bucket {
+	case BucketProxy:
 		m.proxyUploadTemp.Add(size)
 		m.proxyUploadTotal.Add(size)
+	case BucketDirect:
+		m.directUploadTotal.Add(size)
+	case BucketReject:
+		m.rejectUploadTotal.Add(size)
 	}
 	m.uploadTemp.Add(size)
 	m.uploadTotal.Add(size)
 }
 
-func (m *Manager) PushDownloaded(finalOutbound string, size int64) {
-	if isProxyOutbound(finalOutbound) {
+func (m *Manager) pushDownloaded(bucket OutboundBucket, size int64) {
+	switch bucket {
+	case BucketProxy:
 		m.proxyDownloadTemp.Add(size)
 		m.proxyDownloadTotal.Add(size)
+	case BucketDirect:
+		m.directDownloadTotal.Add(size)
+	case BucketReject:
+		m.rejectDownloadTotal.Add(size)
 	}
 	m.downloadTemp.Add(size)
 	m.downloadTotal.Add(size)
+}
+
+// BucketTotal is one bucket's session-long byte totals.
+type BucketTotal struct {
+	Up   int64
+	Down int64
+}
+
+// OutboundTotals is what the widget asks for: bytes per bucket and connection counts,
+// all since this process started. Active is the number of tracked connections open
+// right now; Rejected counts connections handed to a reject outbound.
+type OutboundTotals struct {
+	Proxy    BucketTotal
+	Direct   BucketTotal
+	Reject   BucketTotal
+	Opened   int64
+	Active   int64
+	Rejected int64
+}
+
+func (m *Manager) OutboundTotals() OutboundTotals {
+	return OutboundTotals{
+		Proxy:    BucketTotal{Up: m.proxyUploadTotal.Load(), Down: m.proxyDownloadTotal.Load()},
+		Direct:   BucketTotal{Up: m.directUploadTotal.Load(), Down: m.directDownloadTotal.Load()},
+		Reject:   BucketTotal{Up: m.rejectUploadTotal.Load(), Down: m.rejectDownloadTotal.Load()},
+		Opened:   m.opened.Load(),
+		Active:   m.active.Load(),
+		Rejected: m.rejected.Load(),
+	}
+}
+
+// noteJoin and noteLeave keep the connection counts beside the byte counters, on the
+// open/close path rather than the byte path.
+func (m *Manager) noteJoin(bucket OutboundBucket) {
+	m.opened.Add(1)
+	m.active.Add(1)
+	if bucket == BucketReject {
+		m.rejected.Add(1)
+	}
+}
+
+func (m *Manager) noteLeave() {
+	m.active.Add(-1)
 }
 
 // Now returns the transfer rate over the last sampled second.
