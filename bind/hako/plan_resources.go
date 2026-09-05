@@ -90,6 +90,7 @@ const (
 	planNoticeProviderHeaderDropped         = "provider-header-dropped"
 	planNoticeOutboundDNSFragmentInert      = "outbound-dns-fragment-inert"
 	planNoticeOutboundOptionUnrepresentable = "outbound-option-unrepresentable"
+	planNoticeProviderCoreFetch             = "provider-core-fetch"
 )
 
 // note records one notice in both forms.
@@ -379,6 +380,16 @@ func httpProviders(root map[string]any, key, kind string) ([]planProvider, []pla
 				UpdateIntervalSeconds: updateIntervalSeconds,
 			})
 		}
+	}
+	if fetchable := len(out); fetchable > 0 {
+		// Remote providers used to be refused at activation unless the app had
+		// downloaded every one of them. They are accepted now: what the app
+		// manages to download is staged as before, and what it cannot reach starts
+		// empty inside the core and is fetched there in the background with backoff
+		// .
+		// refusal-id: ConfigPipeline.remoteProviderNotPreDownloaded (aligned to a notice)
+		notices = append(notices, planNotice{Kind: planNoticeProviderCoreFetch, Field: key, Value: fmt.Sprintf("%d", fetchable),
+			Text: fmt.Sprintf("%s: %d remote provider(s); any this app has no copy of at activation starts empty and is downloaded by the core in the background", key, fetchable)})
 	}
 	return out, errors, notices
 }

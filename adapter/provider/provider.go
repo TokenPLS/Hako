@@ -144,6 +144,13 @@ func (pp *proxySetProvider) Name() string {
 	return pp.Fetcher.Name()
 }
 
+// SideUpdate feeds a payload obtained elsewhere into the live provider: parsed,
+// written to the vehicle path, applied through the same path a pull uses.
+func (pp *proxySetProvider) SideUpdate(payload []byte) error {
+	_, _, err := pp.Fetcher.SideUpdate(payload)
+	return err
+}
+
 func (pp *proxySetProvider) Update() error {
 	_, _, err := pp.Fetcher.Update()
 	return err

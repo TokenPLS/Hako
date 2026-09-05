@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -398,13 +399,15 @@ func loadProvider[T P.Provider](providers map[string]T) {
 		}
 
 		if err := pv.Initial(); err != nil {
-			switch pv.Type() {
-			case P.Proxy:
-				{
+			if errors.Is(err, resource.ErrRemoteFetchDeferred) {
+				// Not a failure: the Apple binding starts a remote provider with no
+				// local copy empty and downloads it in the background.
+				log.Infoln("initial %s provider %s deferred: it starts empty and loads in the background", pv.Type(), name)
+			} else {
+				switch pv.Type() {
+				case P.Proxy:
 					log.Errorln("initial proxy provider %s error: %v", name, err)
-				}
-			case P.Rule:
-				{
+				case P.Rule:
 					log.Errorln("initial rule provider %s error: %v", name, err)
 				}
 			}

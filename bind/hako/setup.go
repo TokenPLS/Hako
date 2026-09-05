@@ -23,6 +23,7 @@ import (
 
 	"github.com/TokenPLS/Hako/component/ca"
 	"github.com/TokenPLS/Hako/component/profile/cachefile"
+	"github.com/TokenPLS/Hako/component/resource"
 	C "github.com/TokenPLS/Hako/constant"
 	"github.com/TokenPLS/Hako/listener/sing_tun"
 	tun "github.com/metacubex/sing-tun"
@@ -192,6 +193,12 @@ func Setup(options *SetupOptions) error {
 
 	startupPhase("setup:cert-store")
 	applyGVisorTCPBufferOverride(options.BasePath)
+	// Remote providers with no local copy start empty and are fetched in the
+	// background; a download that names no size-limit is capped at the provider
+	// ceiling. Both because Initial sits on the tunnel's Start path inside a fixed
+	// memory budget.
+	resource.DeferRemoteInitialFetch = true
+	resource.DefaultRemoteSizeLimit = int64(maximumProviderResourceBytes)
 	if options.DisablePersistentCache {
 		if err := cachefile.DisablePersistentCache(); err != nil {
 			return bridgeSafeError(fmt.Errorf("hako: disable persistent cache: %w", err))

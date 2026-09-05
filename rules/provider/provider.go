@@ -99,6 +99,18 @@ func (rp *ruleSetProvider) Initial() error {
 	return err
 }
 
+// Format is the rule format this provider parses its payload with.
+func (rp *ruleSetProvider) Format() P.RuleFormat {
+	return rp.format
+}
+
+// SideUpdate feeds a payload obtained elsewhere (the app fetched it through the
+// tunnel) into the live provider: parsed, written to the vehicle path, applied.
+func (rp *ruleSetProvider) SideUpdate(payload []byte) error {
+	_, _, err := rp.Fetcher.SideUpdate(payload)
+	return err
+}
+
 func (rp *ruleSetProvider) Update() error {
 	_, _, err := rp.Fetcher.Update()
 	return err

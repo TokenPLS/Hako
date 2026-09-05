@@ -173,6 +173,9 @@ func (h *HTTPVehicle) Read(ctx context.Context, oldHash utils.HashType) (buf []b
 }
 
 func NewHTTPVehicle(url string, path string, proxy string, header http.Header, timeout time.Duration, sizeLimit int64) *HTTPVehicle {
+	if sizeLimit <= 0 && DefaultRemoteSizeLimit > 0 {
+		sizeLimit = DefaultRemoteSizeLimit
+	}
 	return &HTTPVehicle{
 		url:       url,
 		path:      path,

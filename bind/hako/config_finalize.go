@@ -243,7 +243,13 @@ func rewriteProviders(root map[string]any, key, kind string, paths map[string]st
 			return err
 		}
 		if !found {
-			return fmt.Errorf("%s %q was not materialized with resource key %q", key, name, providerResourceKey(kind, name))
+			// The app has no copy of this one (offline at activation, or a host it
+			// could not reach). The definition stays a remote provider with every
+			// field it was written with; the core starts it empty and downloads it
+			// in the background (DeferRemoteInitialFetch), storing it under the
+			// path the profile names or upstream's default
+			// <home>/<proxies|rules>/<hash(url)>.
+			continue
 		}
 		def["type"] = "file"
 		def["path"] = path

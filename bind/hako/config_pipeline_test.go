@@ -695,9 +695,11 @@ rules:
 	}
 }
 
-func TestParseConfigForIOSRejectsRemoteProviderBeforeParse(t *testing.T) {
+func TestParseConfigForIOSAcceptsARemoteProvider(t *testing.T) {
+	// the definition parses as written; the core starts it empty and
+	// fetches it in the background, so nothing here touches the network.
 	setupConfigPipelineTest(t)
-	_, err := parseConfigForIOS(`
+	if _, err := parseConfigForIOS(`
 proxy-providers:
   remote:
     type: http
@@ -705,25 +707,8 @@ proxy-providers:
     path: ./providers/remote.yaml
 rules:
   - MATCH,DIRECT
-`, false)
-	if err == nil || !strings.Contains(err.Error(), "pre-download") {
-		t.Fatalf("remote provider error = %v", err)
-	}
-}
-
-func TestParseConfigForIOSUsesStableRemoteProviderPriority(t *testing.T) {
-	setupConfigPipelineTest(t)
-	_, err := parseConfigForIOS(`
-proxy-providers:
-  zebra: {type: http, url: https://example.com/zebra.yaml}
-  alpha: {type: http, url: https://example.com/alpha.yaml}
-rule-providers:
-  aardvark: {type: http, behavior: domain, url: https://example.com/rules.yaml}
-rules:
-  - MATCH,DIRECT
-`, false)
-	if err == nil || !strings.Contains(err.Error(), `proxy-provider "alpha"`) {
-		t.Fatalf("first remote provider error = %v, want proxy-provider alpha", err)
+`, false); err != nil {
+		t.Fatalf("remote provider refused: %v", err)
 	}
 }
 

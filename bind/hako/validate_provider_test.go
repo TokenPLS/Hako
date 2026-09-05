@@ -1,7 +1,6 @@
 package hako
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/TokenPLS/Hako/config"
@@ -26,14 +25,15 @@ type fakeProxyProvider struct {
 func (f *fakeProxyProvider) Name() string               { return "remote-proxies" }
 func (f *fakeProxyProvider) VehicleType() P.VehicleType { return f.vehicle }
 
-func TestValidateProvidersRejectsRemote(t *testing.T) {
+func TestValidateProvidersAcceptsRemote(t *testing.T) {
+	// a remote provider is accepted as written; the core fetches it in the
+	// background instead of the app being asked to pre-download it.
 	http := &config.Config{
 		DNS:           &config.DNS{Enable: false},
 		RuleProviders: map[string]P.RuleProvider{"remote-rules": &fakeRuleProvider{vehicle: P.HTTP}},
 	}
-	err := validateForIOS(http, false)
-	if err == nil || !strings.Contains(err.Error(), "remote (HTTP)") {
-		t.Fatalf("expected HTTP provider rejection, got %v", err)
+	if err := validateForIOS(http, false); err != nil {
+		t.Fatalf("remote provider must pass validation now, got %v", err)
 	}
 
 	file := &config.Config{
@@ -42,18 +42,5 @@ func TestValidateProvidersRejectsRemote(t *testing.T) {
 	}
 	if err := validateForIOS(file, false); err != nil {
 		t.Fatalf("file provider should pass: %v", err)
-	}
-}
-
-func TestValidateProvidersUsesStableNamePriority(t *testing.T) {
-	cfg := &config.Config{
-		Providers: map[string]P.ProxyProvider{
-			"zebra": &fakeProxyProvider{vehicle: P.HTTP},
-			"alpha": &fakeProxyProvider{vehicle: P.HTTP},
-		},
-	}
-	err := validateProvidersForIOS(cfg, nil)
-	if err == nil || !strings.Contains(err.Error(), `"alpha"`) {
-		t.Fatalf("first provider error = %v, want alpha", err)
 	}
 }

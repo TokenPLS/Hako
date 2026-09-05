@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 	"os"
@@ -98,6 +99,17 @@ func (f *Fetcher[V]) Initial() (V, error) {
 	}
 
 	// parse local file error, fallback to remote
+	if DeferRemoteInitialFetch && f.vehicle.Type() == P.HTTP {
+		// Nothing on disk and a download to make. On the Apple binding that
+		// download does not run here: Initial sits on the Start path, one attempt
+		// costs the vehicle's timeout, and a profile with dozens of remote sets
+		// on a network that cannot reach them would hold the tunnel for minutes.
+		// The provider starts empty -- the shape upstream leaves it in when this
+		// download fails -- and firstLoadLoop brings it in with backoff, whatever
+		// the interval says, then hands over to the pull loop.
+		go f.firstLoadLoop()
+		return lo.Empty[V](), ErrRemoteFetchDeferred
+	}
 	contents, _, updateErr := f.Update()
 
 	// start the pull loop even if f.Update() failed
@@ -227,6 +239,57 @@ func (f *Fetcher[V]) startPullLoop(forceUpdate bool) (err error) {
 		go f.pullLoop(forceUpdate)
 	}
 	return
+}
+
+// DeferRemoteInitialFetch makes Initial return ErrRemoteFetchDeferred for a remote
+// vehicle with no local copy instead of downloading on the caller's thread; the
+// first download then runs in the background with backoff until it succeeds. Set by
+// the Apple binding, where Initial runs on the tunnel's Start path under a memory and
+// time budget; false keeps upstream's behaviour exactly.
+var DeferRemoteInitialFetch bool
+
+// ErrRemoteFetchDeferred is what Initial returns when DeferRemoteInitialFetch moved
+// the first download into the background: the provider is empty for now, not broken.
+var ErrRemoteFetchDeferred = errors.New("remote fetch deferred to the background")
+
+// DefaultRemoteSizeLimit caps a remote download whose definition names no size-limit.
+// Zero keeps upstream's behaviour (no cap). The Apple binding sets it because the
+// body is read into memory inside a process with a fixed ceiling.
+var DefaultRemoteSizeLimit int64
+
+// The first-load backoff is its own schedule, not the pull loop's: that one is
+// bounded by the interval, and an interval of zero means "never refresh", which must
+// not also mean "never load".
+var (
+	deferredFirstLoadMinBackoff = 10 * time.Second
+	deferredFirstLoadMaxBackoff = 10 * time.Minute
+)
+
+// firstLoadLoop downloads a deferred provider until it lands, then starts the pull
+// loop if the interval asks for one. Every failure is logged with the wait that
+// follows it, so a provider that never arrives says so in the log rather than
+// staying silently empty.
+func (f *Fetcher[V]) firstLoadLoop() {
+	backoff := slowdown.Backoff{Factor: 2, Min: deferredFirstLoadMinBackoff, Max: deferredFirstLoadMaxBackoff}
+	for {
+		_, _, err := f.Update()
+		if err == nil {
+			log.Infoln("[Provider] %s loaded in the background", f.Name())
+			if f.interval > 0 {
+				go f.pullLoop(false)
+			}
+			return
+		}
+		wait := backoff.Duration()
+		log.Warnln("[Provider] %s background load failed: %s; next attempt in %s", f.Name(), err.Error(), wait)
+		timer := time.NewTimer(wait)
+		select {
+		case <-timer.C:
+		case <-f.ctx.Done():
+			timer.Stop()
+			return
+		}
+	}
 }
 
 func (f *Fetcher[V]) updateCallback(path string) {

@@ -10,7 +10,6 @@ import (
 
 	"github.com/TokenPLS/Hako/common/utils"
 	"github.com/TokenPLS/Hako/config"
-	P "github.com/TokenPLS/Hako/constant/provider"
 	"github.com/TokenPLS/Hako/dns"
 	"github.com/TokenPLS/Hako/transport/xhttp"
 )
@@ -446,7 +445,9 @@ func validateForApple(cfg *config.Config, raw *config.RawConfig, policy appleRun
 			return err
 		}
 	}
-	return validateProvidersForIOS(cfg, unfetchableProviderNames(raw))
+	// Remote providers are no longer refused here; see validateRawProvidersForIOS
+	// in config_pipeline.go for why.
+	return nil
 }
 
 // validateTunForIOS has nothing left to refuse. It kept the same route-address-set rejection
@@ -657,46 +658,6 @@ func unfetchableProviderNames(raw *config.RawConfig) map[string]bool {
 		}
 	}
 	return out
-}
-
-// validateProvidersForIOS rejects remote (HTTP) rule/proxy providers.
-// Their Initial() fetches from the network during ApplyConfig,
-// which blocks Start and can spike memory inside the NE. Downstream must
-// pre-download them app-side and reference file-based providers.
-//
-// Except one whose url cannot produce a request at all. That one rides empty
-// exactly as it does upstream (hub/executor/executor.go:400-411), and both
-// earlier layers already say so -- config_finalize.go:228-232 leaves it alone
-// and config_pipeline.go's raw check skips it. This was the third copy of the
-// same question, and until 2026-08-27 it answered differently from the other
-// two, which is how a notice promising the tunnel would start ended at a
-// refusal. Found by Codex.
-func validateProvidersForIOS(cfg *config.Config, unfetchable map[string]bool) error {
-	proxyProviderNames := make([]string, 0, len(cfg.Providers))
-	for name := range cfg.Providers {
-		proxyProviderNames = append(proxyProviderNames, name)
-	}
-	sort.Strings(proxyProviderNames)
-	for _, name := range proxyProviderNames {
-		p := cfg.Providers[name]
-		if p.VehicleType() == P.HTTP && !unfetchable[name] {
-			// refusal-id: ConfigPipeline.remoteProviderNotPreDownloaded
-			return fmt.Errorf("hako: proxy-provider %q is remote (HTTP) — parse-time fetch is unsupported on iOS; pre-download it app-side and use a file provider", name)
-		}
-	}
-	ruleProviderNames := make([]string, 0, len(cfg.RuleProviders))
-	for name := range cfg.RuleProviders {
-		ruleProviderNames = append(ruleProviderNames, name)
-	}
-	sort.Strings(ruleProviderNames)
-	for _, name := range ruleProviderNames {
-		p := cfg.RuleProviders[name]
-		if p.VehicleType() == P.HTTP && !unfetchable[name] {
-			// refusal-id: ConfigPipeline.remoteProviderNotPreDownloaded
-			return fmt.Errorf("hako: rule-provider %q is remote (HTTP) — parse-time fetch is unsupported on iOS; pre-download it app-side and use a file provider", name)
-		}
-	}
-	return nil
 }
 
 // outboundOptionIssue names one outbound option this build cannot represent.

@@ -70,12 +70,11 @@ rule-providers:
 	}
 }
 
-// keeps downloads on the App side: a remote provider inside the Network
-// Extension fetches during ApplyConfig, which blocks Start and spikes memory in
-// a 50 MiB process. The refusal reads definition["type"], so `Type: http` used
-// to walk straight past it — and past the http→file materialization — leaving
-// upstream to build a live HTTPVehicle in the extension.
-func TestRemoteProviderIsRefusedWhateverTheKeyCase(t *testing.T) {
+// A remote provider is accepted whatever the spelling of its type key. The refusal
+// this test used to pin is gone (: the core fetches remote providers in the
+// background); what stays is that canonicalization must still see the definition,
+// because the staging and finalize layers read definition["type"] too.
+func TestRemoteProviderIsAcceptedWhateverTheKeyCase(t *testing.T) {
 	for _, spelling := range []string{"type", "Type", "TYPE", "tYpE"} {
 		content := "proxy-providers:\n  air:\n    " + spelling + ": http\n    url: http://example.com/n.yaml\n    path: ./n.yaml\n"
 		raw, err := config.UnmarshalRawConfig([]byte(content))
@@ -83,17 +82,11 @@ func TestRemoteProviderIsRefusedWhateverTheKeyCase(t *testing.T) {
 			t.Fatalf("%s: unmarshal: %v", spelling, err)
 		}
 		canonicalizeProviderDefinitionKeys(raw)
-		err = validateRawProvidersForIOS("proxy-provider", raw.ProxyProvider)
-		if err == nil {
-			t.Fatalf("%s: a remote provider was accepted; downloading inside the extension is forbidden", spelling)
+		if err := validateRawProvidersForIOS("proxy-provider", raw.ProxyProvider); err != nil {
+			t.Fatalf("%s: a remote provider was refused: %v", spelling, err)
 		}
-		// Assert on what the refusal TELLS the reader, not on the task id: the
-		// OSS export scrubs bracketed ids out of string literals by design
-		// (that is why they are written in that shape), so an id-keyed
-		// assertion passes privately and fails in the exported tree -- which
-		// is exactly what it did here.
-		if !strings.Contains(err.Error(), "remote") || !strings.Contains(err.Error(), "file provider") {
-			t.Fatalf("%s: refusal does not say what is wrong or what to do: %v", spelling, err)
+		if _, ok := raw.ProxyProvider["air"]["type"]; !ok {
+			t.Fatalf("%s: canonicalization did not lower the type key", spelling)
 		}
 	}
 }

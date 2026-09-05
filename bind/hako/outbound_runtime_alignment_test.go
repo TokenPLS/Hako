@@ -1,7 +1,6 @@
 package hako
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -95,20 +94,22 @@ rules:
 // It was in an earlier draft of this test until the error text showed whose it
 // was. A value upstream refuses is not self-mutilation to refuse.
 
-// What must still be refused, and why it is not the same thing: these are not
-// judgements about a value's range, they are facts about this platform. The app
-// materializes geodata and remote providers before the extension starts, so a
-// configuration naming one that is not there cannot run at all.
-func TestParseConfigStillRefusesWhatThePlatformCannotDo(t *testing.T) {
+// A remote provider may start without a local payload. The core loads it in
+// the background; parsing must preserve its definition for that first load.
+func TestParseConfigPreservesUnmaterializedRemoteProvider(t *testing.T) {
 	setupConfigPipelineTest(t)
-	_, err := parseConfigForIOS(`
+	configuration, err := parseConfigForIOS(`
 rule-providers:
-  remote: {type: http, behavior: domain, url: "https://example.com/r.yaml"}
+  remote: {type: http, behavior: domain, url: "https://example.invalid/r.yaml"}
 dns: {enable: true, nameserver: [1.1.1.1]}
 rules:
+  - RULE-SET,remote,REJECT
   - MATCH,DIRECT
 `, true)
-	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "provider") {
-		t.Fatalf("a remote provider the app never materialized was accepted: %v", err)
+	if err != nil {
+		t.Fatalf("remote provider definition was refused: %v", err)
+	}
+	if _, ok := configuration.RuleProviders["remote"]; !ok {
+		t.Fatal("remote provider definition was dropped instead of deferred")
 	}
 }

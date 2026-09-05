@@ -1182,12 +1182,20 @@ func (runtime *providerRuntime) close() {
 func (s *BoxService) sideUpdateProvider(kind, name string, payload []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.running || s.providerRuntime == nil {
+	if !s.running {
 		return fmt.Errorf("hako: provider runtime is unavailable")
+	}
+	if s.providerRuntime == nil {
+		// Nothing was staged -- every provider in this configuration is remote or
+		// inline -- so the only side update possible is the remote kind.
+		return sideUpdateRemoteProvider(kind, name, payload, currentRuntimePolicy(s.platform.UnderNetworkExtension()))
 	}
 	entry, exists := s.providerRuntime.entries[providerRuntimeKey(kind, name)]
 	if !exists {
-		return fmt.Errorf("hako: provider is not side-updateable")
+		// Not staged means not file-backed. A remote provider the app could not
+		// download at activation runs on its http vehicle, and the app, once it
+		// has fetched the payload through the tunnel, hands it in here.
+		return sideUpdateRemoteProvider(kind, name, payload, s.providerRuntime.policy)
 	}
 	if !entry.sideUpdateSafe {
 		return fmt.Errorf("hako: provider affects Apple platform routes or lacks side-update metadata")
@@ -1283,4 +1291,74 @@ func stagedRuleSetCount(behavior, format string, staged []byte) int {
 		return 0
 	}
 	return count
+}
+
+// remoteSideUpdater is what a live http-vehicle provider offers a side update:
+// parse, write to its own path, apply -- the same path a scheduled pull takes.
+type remoteSideUpdater interface {
+	SideUpdate(payload []byte) error
+}
+
+// sideUpdateRemoteProvider applies an app-fetched payload to a live provider that
+// runs on an http vehicle. The payload is prepared exactly as a staged one would be
+// (rule metadata the platform cannot evaluate stripped; proxy egress fields the
+// extension cannot honour stripped), then handed to the provider itself.
+func sideUpdateRemoteProvider(kind, name string, payload []byte, policy appleRuntimePolicy) error {
+	var live P.Provider
+	var prepared []byte
+	switch kind {
+	case "rule":
+		provider, ok := tunnel.RuleProviders()[name]
+		if !ok {
+			return fmt.Errorf("hako: provider is not side-updateable")
+		}
+		formatted, ok := provider.(interface{ Format() P.RuleFormat })
+		if !ok {
+			return fmt.Errorf("hako: provider is not side-updateable")
+		}
+		next, stripped, err := prepareRuleProviderRuntimePayload(
+			strings.ToLower(provider.Behavior().String()), ruleFormatSpelling(formatted.Format()), payload, policy)
+		if err != nil {
+			return err
+		}
+		warnProviderMetadataNoops(name, stripped)
+		live, prepared = provider, next
+	case "proxy":
+		provider, ok := tunnel.Providers()[name]
+		if !ok {
+			return fmt.Errorf("hako: provider is not side-updateable")
+		}
+		next, stripped, err := sanitizeProxyProviderPayloadForIOS("", payload, false)
+		if err != nil {
+			return err
+		}
+		warnProviderEgressNoops(name, stripped)
+		live, prepared = provider, next
+	default:
+		return fmt.Errorf("hako: invalid provider kind")
+	}
+	if live.VehicleType() != P.HTTP {
+		return fmt.Errorf("hako: provider is not side-updateable")
+	}
+	updater, ok := live.(remoteSideUpdater)
+	if !ok {
+		return fmt.Errorf("hako: provider is not side-updateable")
+	}
+	if err := updater.SideUpdate(prepared); err != nil {
+		return fmt.Errorf("hako: provider update rejected: %w", err)
+	}
+	return nil
+}
+
+// ruleFormatSpelling turns the enum back into the word a definition writes, which is
+// what the payload preparers parse; the enum's String() is a type name, not that word.
+func ruleFormatSpelling(format P.RuleFormat) string {
+	switch format {
+	case P.TextRule:
+		return "text"
+	case P.MrsRule:
+		return "mrs"
+	default:
+		return "yaml"
+	}
 }

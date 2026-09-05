@@ -1203,40 +1203,16 @@ func validateRawProvidersForIOS(kind string, providers map[string]map[string]any
 				return err
 			}
 		}
-		typeName, _ := provider["type"].(string)
-		if strings.EqualFold(typeName, "http") {
-			// refuses a provider that would fetch during parse, and the
-			// reason is measured: parse-time network I/O blocks or blows the
-			// ~50 MiB extension ceiling. That reason cannot reach a url this
-			// build could never issue a request for. url.Parse fails, the
-			// vehicle errors before any socket, and upstream logs it and rides
-			// empty (hub/executor/executor.go:400-411).
-			//
-			// So this asks the SAME question the finalize layer asks, with the
-			// same predicate. config_finalize.go:228-232 already skips a
-			// provider whose url normalizeResourceURL rejects, and its comment
-			// says the definition "reaches the kernel, which fails its download
-			// and rides empty, exactly as upstream does" -- while this line
-			// refused the whole configuration two steps later and made that
-			// sentence false. aligned the plan and left this half
-			// standing; Codex found it on 2026-08-27.
-			//
-			// A provider with a usable url is still refused, and must be: that
-			// one really would open a socket during parse, and the app was
-			// asked to download it precisely so it does not have to.
-			// No `rawURL != ""` guard here either: an absent url is the
-			// clearest case of a url no request can be made from, and skipping
-			// the question for it left this layer refusing a provider the other
-			// two had already decided to tolerate.
-			rawURL, _ := provider["url"].(string)
-			_, urlErr := normalizeResourceURL(rawURL, "provider")
-			usableURL := urlErr == nil
-			if !usableURL {
-				continue
-			}
-			// refusal-id: ConfigPipeline.remoteProviderNotPreDownloaded
-			return fmt.Errorf("hako: %s %q is remote (HTTP) — pre-download it app-side and use a file provider", kind, name)
-		}
+		// A remote (http) provider is accepted as written. It used to be refused here
+		// unless the app had pre-downloaded it: upstream fetches it inside
+		// Initial, on the Start path, and one unreachable host could hold the tunnel
+		// for the vehicle's whole timeout. That cost is gone -- on the Apple binding a
+		// remote provider with no local copy starts empty and is fetched in the
+		// background with backoff (component/resource, DeferRemoteInitialFetch), the
+		// shape upstream leaves it in when the download fails -- so the refusal had
+		// nothing left to protect. The app still stages what it managed to download;
+		// what it could not, the core brings in later. The registry entry
+		// ConfigPipeline.remoteProviderNotPreDownloaded now marks a plan notice.
 	}
 	return nil
 }
