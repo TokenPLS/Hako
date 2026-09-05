@@ -2,11 +2,8 @@ name: CI
 on:
   push:
     branches: [ main ]
-    # Tags too, and not for symmetry. The version tag is what makes the
-    # xcframework job able to run at all, and a snapshot is pushed before the
-    # tag that names it -- so the run triggered by the branch push necessarily
-    # predates the tag and fails the check for it. Triggering on the tag gives
-    # that run a tree where the tag exists.
+    # Source commits keep public history. Release tags separately trigger
+    # the versioned SDK build and release workflow.
     tags: [ 'v*' ]
   pull_request: {}
   workflow_dispatch: {}
@@ -43,24 +40,16 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version: '1.26.x' }
       - name: Make a core version available
-        # build_libbox reads the core version from `git describe --tags`, which
-        # only sees tags REACHABLE from HEAD. Each publish here replaces main
-        # with a fresh orphan commit, and that orphans every existing tag along
-        # with the old history -- so a branch build finds no reachable tag as a
-        # rule, not as an accident. The first version of this step failed the
-        # job in that case, which made a guaranteed condition look like a
-        # breakage and demanded a manual re-run after every single publish.
-        #
-        # A tag push carries its own version and is the only build anyone
-        # downloads. A branch build exists to prove the tree still binds, so it
-        # gets a placeholder that cannot be mistaken for a release.
+        # Incremental source commits retain reachable release tags. The old
+        # baseline may have no tag, so an unversioned development build still
+        # uses a placeholder; only tag-triggered builds become releases.
         run: |
           if described=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null); then
             echo "core version derives from ${described}"
           else
             git tag v0.0.0-hako.0
-            echo "No v* tag is reachable from this commit, which is the normal"
-            echo "state of a branch build here. Stamping v0.0.0-hako.0; released"
+            echo "No v* tag is reachable from this baseline."
+            echo "Stamping v0.0.0-hako.0 for this development build; released"
             echo "artifacts are built from tag pushes and carry a real version."
           fi
       - name: Install the pinned gomobile fork
@@ -122,9 +111,8 @@ jobs:
             printf '`Hako.xcframework.zip` is built by this workflow from the tagged\n'
             printf 'commit, and carries all five Apple slices: iOS device and simulator,\n'
             printf 'macOS, tvOS device and simulator.\n\n'
-            printf 'This repository is published as one whole snapshot per release\n'
-            printf 'rather than as a running branch, so there is no commit-by-commit\n'
-            printf 'history between tags to compare.\n'
+            printf 'Public source changes are retained as incremental commits.\n'
+            printf 'Compare release tags to inspect the changes between versions.\n'
           } > notes.md
           cat notes.md
       - name: Publish
