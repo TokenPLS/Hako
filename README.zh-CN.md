@@ -23,6 +23,11 @@ Hako 把成熟的 **mihomo**（Clash.Meta）代理引擎打包成 `Hako.xcframew
 
 用它就能做出一个**兼容 Clash / mihomo 的 VPN App**，覆盖 iPhone、iPad 和 Mac。Hako 基于 mihomo 稳定版分叉，专门调校过，能在 Apple 严苛的 Network Extension 内存和耗电限制里稳稳运行。
 
+## 官网与客户端
+
+- [官方网站](https://clash.md/)
+- [在 App Store 下载官方客户端](https://apps.apple.com/app/id6794257189)
+
 ## 快，而且不崩
 
 iOS 只给一个 VPN App 大约 **50 MiB 内存**，超过这条线，系统就直接把它杀掉（Apple 把这叫 *jetsam*）。真流量一上来，写得糙的代理就会冲破这条线然后崩溃 —— 这是 iPhone、iPad 上代理类 App 人尽皆知的老大难。Hako 从设计上就稳稳压在线以下。下面全是在真机 **iPad Pro（M2）** 上实测的数字：

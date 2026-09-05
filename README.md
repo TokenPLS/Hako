@@ -21,6 +21,11 @@ Hako packages the proven **mihomo** (Clash.Meta) proxy engine as `Hako.xcframewo
 
 Use it to ship a **Clash / mihomo-compatible VPN app** for iPhone, iPad, and Mac. Hako is a fork of a stable mihomo release, tuned to live inside Apple's strict Network Extension limits on memory and battery.
 
+## Official website and client
+
+- [Official website](https://clash.md/)
+- [Download the official client on the App Store](https://apps.apple.com/app/id6794257189)
+
 ## Fast, and it doesn't fall over
 
 iOS only lets a VPN app use about **50 MiB of memory** before the system force-quits it (Apple calls this *jetsam*). Push real traffic through a careless proxy and it blows past that and crashes — a well-known pain point for proxy apps on iPhone and iPad. Hako is built to stay well under the line. Real numbers, all measured on a physical **iPad Pro (M2)**:
