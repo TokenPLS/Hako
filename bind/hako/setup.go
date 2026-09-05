@@ -24,6 +24,7 @@ import (
 	"github.com/TokenPLS/Hako/component/ca"
 	"github.com/TokenPLS/Hako/component/profile/cachefile"
 	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/listener/sing_tun"
 	tun "github.com/metacubex/sing-tun"
 	"github.com/sirupsen/logrus"
 )
@@ -85,6 +86,14 @@ type SetupOptions struct {
 	// Startup-only, like RuntimeProfile: the pool is built lazily and taken by the
 	// first TLS client, so a later change would apply to nothing.
 	CertificateStore string
+	// IncludeAllNetworks is the extension's reading of
+	// NETunnelProviderProtocol.includeAllNetworks for the tunnel it is starting -- the
+	// installed configuration's value, not an app preference. Startup-only, like
+	// RuntimeProfile: the setting changes only with a reconnect. Under it the system and
+	// mixed tun stacks carry nothing (the kernel drops what they re-inject), so a written
+	// system/mixed stack is moved to gVisor and reported, and sing-tun is told the setting
+	// so a stack the override misses fails at Start instead of running silently.
+	IncludeAllNetworks bool
 	// MemoryPressureShed lets the memory threshold machine close tracked connections when it
 	// decides memory is critical. Default false = report only.
 	//
@@ -163,6 +172,15 @@ func Setup(options *SetupOptions) error {
 			requestedRuntimeProfile.String(),
 		))
 	}
+	if activeCoreCount.Load() > 0 && options.IncludeAllNetworks != includeAllNetworksRequested.Load() {
+		return bridgeSafeError(fmt.Errorf(
+			"hako: changing IncludeAllNetworks from %v to %v requires restart",
+			includeAllNetworksRequested.Load(),
+			options.IncludeAllNetworks,
+		))
+	}
+	includeAllNetworksRequested.Store(options.IncludeAllNetworks)
+	sing_tun.IncludeAllNetworks = options.IncludeAllNetworks
 	startupPhase("setup:entered")
 	requestedCertificateStore, err := ca.ParseStore(options.CertificateStore)
 	if err != nil {

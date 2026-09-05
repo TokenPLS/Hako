@@ -5,6 +5,7 @@ import (
 
 	"github.com/TokenPLS/Hako/component/process"
 	"github.com/TokenPLS/Hako/config"
+	C "github.com/TokenPLS/Hako/constant"
 	LC "github.com/TokenPLS/Hako/listener/config"
 )
 
@@ -183,6 +184,14 @@ func overrideTunForIOS(tun *LC.Tun) {
 	// The Release data plane is NEPacketTunnelFlow bridged through an internal
 	// SOCK_DGRAM fd. It is deliberately not an Apple utun descriptor.
 	tun.Device = packetFlowBridgeDevice
+	// Include All Networks: the system and mixed stacks re-inject the tunnel's TCP through
+	// the kernel, and under the setting the kernel drops exactly those packets, so gVisor is
+	// the only stack that carries traffic. The move is reported on tun.stack
+	// (config_deviations.go) and sing-tun is told the setting as well, so a stack this line
+	// does not catch fails at Start instead of running silently (include_all_networks.go).
+	if includeAllNetworksActive() && (tun.Stack == C.TunSystem || tun.Stack == C.TunMixed) {
+		tun.Stack = C.TunGvisor
+	}
 	// Single startup-selected MTU, shared with Swift via TunOptions.GetMTU.
 	// Source YAML cannot override the Apple/Core invariant.
 	tun.MTU = uint32(effectiveTunMTU())

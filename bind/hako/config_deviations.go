@@ -206,6 +206,9 @@ const (
 	tunOffloadBridgeMechanism     = "the data plane is NEPacketTunnelFlow bridged through a SOCK_DGRAM descriptor rather than a utun fd; segmentation offload is negotiated with a tun driver, and the bridge descriptor has no such driver to negotiate with"
 	tunBatchIOBridgeMechanism     = "the data plane is NEPacketTunnelFlow bridged through a SOCK_DGRAM descriptor rather than a utun fd, so the batched utun-fd read/write path these fields select uses ordinary readv/writev instead (this is about the fd, not about socket options -- IP_BOUND_IF is a socket option and works fine over the bridge)"
 	tunAutoRouteFilterMechanism   = "this filters sing-tun's auto-route host routing, which the extension never installs -- NEPacketTunnelNetworkSettings does"
+
+	tunIncludeAllNetworks          = "with Include All Networks on, the system and mixed stacks send nothing; only the gvisor stack carries the tunnel's traffic"
+	tunIncludeAllNetworksMechanism = "Include All Networks makes the kernel drop, at ip_output, every packet that does not leave through the tunnel; the system and mixed stacks re-inject the tunnel's TCP through the kernel and lose it there, which is why sing-tun refuses both under includeAllNetworks (third_party/sing-tun/stack.go)"
 )
 
 func underNetworkExtension(policy appleRuntimePolicy) bool { return policy.networkExtension }
@@ -437,6 +440,20 @@ var deviationRules = []deviationRule{
 	// include-interface, or auto-route, or dns-hijack got it removed or overwritten and was told
 	// nothing. The audit that produced these entries measured all 36 rather than reading the
 	// family note: 12 turned out to be honoured verbatim, 12 cleared, 11 forced.
+	{
+		field:       "tun.stack",
+		category:    deviationForced,
+		effective:   "gvisor: the only stack that carries traffic while Include All Networks is on",
+		reason:      tunIncludeAllNetworks,
+		source:      "bind/hako/override.go overrideTunForIOS; third_party/sing-tun/stack.go ErrIncludeAllNetworks; NETunnelProviderProtocol.includeAllNetworks",
+		recoverable: true,
+		alternative: "turn Include All Networks off in the tunnel settings, or write tun.stack: gvisor",
+		applies: func(policy appleRuntimePolicy) bool {
+			return underPacketTunnel(policy) && includeAllNetworksActive()
+		},
+		forcedValue: "gvisor",
+		mechanism:   tunIncludeAllNetworksMechanism,
+	},
 	{
 		field:       "tun.enable",
 		category:    deviationForced,

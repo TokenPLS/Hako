@@ -39,6 +39,12 @@ import (
 var InterfaceName = "Meta"
 var EnforceBindInterface = false
 
+// IncludeAllNetworks tells sing-tun that the tunnel runs under Apple's Include All
+// Networks, where only the gVisor stack carries traffic; sing-tun then refuses `system`
+// and `mixed` at Start instead of letting them run silently. Set by the Apple binding
+// from the tunnel's installed configuration before Start; false everywhere else.
+var IncludeAllNetworks = false
+
 type Listener struct {
 	closed  bool
 	options LC.Tun
@@ -500,6 +506,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		ForwarderBindInterface: forwarderBindInterface,
 		InterfaceFinder:        interfaceFinder,
 		EnforceBindInterface:   EnforceBindInterface,
+		IncludeAllNetworks:     IncludeAllNetworks,
 	}
 	l.tunIf = tunIf
 
