@@ -2,8 +2,10 @@ package hako
 
 import (
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -60,6 +62,27 @@ func (h *recordingClashAPIHandler) WriteConnections(message string) {
 }
 
 func TestClashAPIClientStreamsAndREST(t *testing.T) {
+	// Own a rejecting endpoint instead of assuming a developer's port 1080
+	// is unused. Every accepted connection closes before a SOCKS handshake.
+	rejecting, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		for {
+			connection, err := rejecting.Accept()
+			if err != nil {
+				return
+			}
+			_ = connection.Close()
+		}
+	}()
+	t.Cleanup(func() { _ = rejecting.Close(); <-stopped })
+	configuration := strings.Replace(helloYAML, "port: 1080",
+		"port: "+strconv.Itoa(rejecting.Addr().(*net.TCPAddr).Port), 1)
+
 	options := testOptions(t)
 	if err := Setup(options); err != nil {
 		t.Fatalf("Setup: %v", err)
@@ -69,7 +92,7 @@ func TestClashAPIClientStreamsAndREST(t *testing.T) {
 		t.Fatalf("NewService: %v", err)
 	}
 	t.Cleanup(func() { _ = service.Close() })
-	if err := service.Start(helloYAML); err != nil {
+	if err := service.Start(configuration); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	path := shortClashSocketPath(t)
@@ -160,7 +183,7 @@ func TestClashAPIClientStreamsAndREST(t *testing.T) {
 	if err != nil || !strings.Contains(proxies, `"probe"`) {
 		t.Fatalf("GetProxies = %q, %v", proxies, err)
 	}
-	if _, err := client.URLTest("probe", "https://www.gstatic.com/generate_204"); err == nil {
+	if _, err := client.URLTest("probe", "http://127.0.0.1:1/"); err == nil {
 		t.Fatal("unreachable fixture unexpectedly passed URLTest")
 	} else {
 		// The error names the endpoint it failed on, proxy name included
