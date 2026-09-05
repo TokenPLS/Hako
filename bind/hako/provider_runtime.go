@@ -118,7 +118,11 @@ const providerRuntimeManifestName = "staged-manifest.json"
 // instead of empty on profiles without compiledRuleSetsOnly.
 // 4: records carry the staged product's digest; a hit verifies it rather than
 // trusting the size alone.
-const providerStagingLogicVersion = 5
+// 6: rule entries carry the count of what was staged (Count). A hit serves the
+// record verbatim, so a manifest from before the field would serve entries
+// without it for as long as their sources stayed put; moving the version
+// restages once and every served entry has one.
+const providerStagingLogicVersion = 6
 
 type stagedProviderNoop struct {
 	Kind   string `json:"kind,omitempty"`
@@ -128,15 +132,22 @@ type stagedProviderNoop struct {
 }
 
 type stagedProviderRecord struct {
-	Source         string               `json:"source"`
-	SourceSize     int64                `json:"sourceSize"`
-	SourceMtimeNS  int64                `json:"sourceMtimeNS"`
-	SourceInode    uint64               `json:"sourceInode"`
-	Behavior       string               `json:"behavior,omitempty"`
-	Format         string               `json:"format,omitempty"`
-	SideUpdateSafe bool                 `json:"sideUpdateSafe,omitempty"`
-	File           string               `json:"file"`
-	StagedSize     int64                `json:"stagedSize"`
+	Source         string `json:"source"`
+	SourceSize     int64  `json:"sourceSize"`
+	SourceMtimeNS  int64  `json:"sourceMtimeNS"`
+	SourceInode    uint64 `json:"sourceInode"`
+	Behavior       string `json:"behavior,omitempty"`
+	Format         string `json:"format,omitempty"`
+	SideUpdateSafe bool   `json:"sideUpdateSafe,omitempty"`
+	File           string `json:"file"`
+	StagedSize     int64  `json:"stagedSize"`
+	// Count is how many entries the staged product holds, for rule entries only:
+	// the header count of a compiled or source MRS, the kept entries of a set that
+	// rides as text. It is what the core will load, not what the source file says
+	// (a stripped PROCESS-NAME line is not counted). The rules page reads it when
+	// the tunnel is down and no running core can answer; with the tunnel up the
+	// live figure wins. Proxy entries carry none -- their entries are nodes.
+	Count          int                  `json:"count,omitempty"`
 	EgressNoops    []stagedProviderNoop `json:"egressNoops,omitempty"`
 	MetadataNoops  []stagedProviderNoop `json:"metadataNoops,omitempty"`
 	UnreadableWarn string               `json:"unreadableWarn,omitempty"`
@@ -860,16 +871,19 @@ func stageProviderRuntime(raw *config.RawConfig, policy appleRuntimePolicy, comp
 			// hashed from the in-memory buffer on purpose: the file is what the
 			// core will read, and the two differ on every path that hardlinks
 			// the source instead of writing prepared bytes.
+			entryBehavior, _ := definition["behavior"].(string)
+			entryFormat, _ := definition["format"].(string)
 			if staged, readErr := os.ReadFile(runtimePath); readErr == nil {
 				record.ContentSHA256 = stagedFileDigest(staged)
+				if namespace.kind == "rule" {
+					record.Count = stagedRuleSetCount(entryBehavior, entryFormat, staged)
+				}
 			}
 			next.Entries[key] = record
 			if namespace.kind == "rule" {
 				logRuleProviderDisposition(name, record)
 			}
 			referenced[fileName] = struct{}{}
-			entryBehavior, _ := definition["behavior"].(string)
-			entryFormat, _ := definition["format"].(string)
 			runtime.entries[key] = providerRuntimeEntry{
 				behavior: entryBehavior, format: entryFormat, sideUpdateSafe: sideUpdateSafe,
 				compiled:    record.CompileVerdict == compileVerdictCompiled,
@@ -1252,4 +1266,21 @@ func (s *BoxService) sideUpdateProvider(kind, name string, payload []byte) error
 		return fmt.Errorf("hako: provider update failed and runtime rollback failed: %v", restoreError)
 	}
 	return fmt.Errorf("hako: provider update rejected: %w", updateError)
+}
+
+// stagedRuleSetCount counts the entries of a rule set from the bytes that landed in
+// the runtime directory, with the behavior and format the core will read them under
+// (a compiled set is counted as the MRS it became). It is the same reader the app uses
+// to inspect a set before import, so the two figures agree. A set that cannot be
+// counted -- empty, or unreadable in a way staging already warned about -- records no
+// count rather than a wrong one.
+func stagedRuleSetCount(behavior, format string, staged []byte) int {
+	if len(staged) == 0 {
+		return 0
+	}
+	count, err := ProviderEntryCountForIOS("rule", behavior, format, staged)
+	if err != nil || count < 0 {
+		return 0
+	}
+	return count
 }
