@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/constant"
 )
 
 // Vehicle Type

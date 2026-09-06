@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/metacubex/mihomo/common/once"
-	"github.com/metacubex/mihomo/ntp"
+	"github.com/TokenPLS/Hako/common/once"
+	"github.com/TokenPLS/Hako/ntp"
 
 	"github.com/metacubex/tls"
 )
@@ -47,16 +47,11 @@ func AddCertificate(certificate string) error {
 }
 
 func initializeCertPool() {
-	var err error
-	if DisableSystemCa {
-		globalCertPool = x509.NewCertPool()
-	} else {
-		globalCertPool, err = x509.SystemCertPool()
-		if err != nil {
-			globalCertPool = x509.NewCertPool()
-		}
-	}
-	if !DisableEmbedCa {
+	// The starting pool now depends on the selected store (store.go, ported from sing-box's
+	// newBasePool). With no selection this is byte-for-byte the previous behaviour.
+	pool, appendEmbedded := basePool(selectedStore)
+	globalCertPool = pool
+	if appendEmbedded {
 		globalCertPool.AppendCertsFromPEM(_CaCertificates)
 	}
 }

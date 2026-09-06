@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/log"
 )
 
 var (
@@ -28,6 +28,9 @@ const (
 )
 
 func (vc *Conn) FilterTLS(buffer []byte) (index int) {
+	vc.stateMu.Lock()
+	defer vc.stateMu.Unlock()
+
 	if vc.packetsToFilter <= 0 {
 		return 0
 	}

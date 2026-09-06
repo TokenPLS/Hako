@@ -1,8 +1,8 @@
 package config
 
 import (
-	"github.com/metacubex/mihomo/component/auth"
-	"github.com/metacubex/mihomo/listener/reality"
+	"github.com/TokenPLS/Hako/component/auth"
+	"github.com/TokenPLS/Hako/listener/reality"
 )
 
 // AuthServer for http/socks/mixed server

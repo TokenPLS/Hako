@@ -8,7 +8,7 @@ import (
 	"net/netip"
 	"syscall"
 
-	"github.com/metacubex/mihomo/common/sockopt"
+	"github.com/TokenPLS/Hako/common/sockopt"
 )
 
 func bindMarkToDialer(mark int, dialer *net.Dialer, _ string, _ netip.Addr) {

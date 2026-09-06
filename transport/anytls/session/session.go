@@ -12,11 +12,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/mihomo/common/buf"
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/anytls/padding"
-	"github.com/metacubex/mihomo/transport/anytls/util"
+	"github.com/TokenPLS/Hako/common/buf"
+	"github.com/TokenPLS/Hako/common/pool"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/transport/anytls/padding"
+	"github.com/TokenPLS/Hako/transport/anytls/util"
 )
 
 type Session struct {

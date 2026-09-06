@@ -1,7 +1,7 @@
 package fakeip
 
 import (
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 const (

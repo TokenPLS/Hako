@@ -3,10 +3,10 @@ package inbound
 import (
 	"strings"
 
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/anytls"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/listener/anytls"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type AnyTLSOption struct {

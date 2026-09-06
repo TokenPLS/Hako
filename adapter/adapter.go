@@ -3,19 +3,20 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/common/queue"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/common/xsync"
-	"github.com/metacubex/mihomo/component/ca"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/atomic"
+	"github.com/TokenPLS/Hako/common/queue"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/common/xsync"
+	"github.com/TokenPLS/Hako/component/ca"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/http"
 )
@@ -36,6 +37,29 @@ type Proxy struct {
 	alive   atomic.Bool
 	history *queue.Queue[C.DelayHistory]
 	extra   xsync.Map[string, *internalProxyState]
+	// now is the clock URLTest measures with. An instance seam rather than a
+	// package variable so a test can hand one proxy a frozen clock without
+	// touching any other; production never sets it.
+	now func() time.Time
+}
+
+// URLTestOutcome is what one URL test measured: the delay, whether the status
+// satisfied the caller's expectation, and the status itself. C.Proxy.URLTest
+// keeps upstream's shape (delay, error) -- a reply with an unexpected status is
+// NOT an error there, because upstream records it only as "not alive for this
+// URL" and marking the proxy dead everywhere for one URL's expectation was the
+// global-death defect. The two callers in this tree that need to act on
+// "answered, but not with the expected status" read it from here instead.
+type URLTestOutcome struct {
+	Delay      uint16
+	Satisfied  bool
+	HTTPStatus int
+}
+
+// URLTestOutcomeProvider is what *Proxy adds on top of C.Proxy. Callers
+// type-assert and fall back to C.Proxy.URLTest when the assertion fails.
+type URLTestOutcomeProvider interface {
+	URLTestOutcome(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (URLTestOutcome, error)
 }
 
 // Adapter implements C.Proxy
@@ -163,9 +187,71 @@ func (p *Proxy) MarshalJSON() ([]byte, error) {
 
 // URLTest get the delay for the specified URL
 // implements C.Proxy
+// URLTest implements C.Proxy: upstream's shape, upstream's semantics. The
+// delay is the measurement; an unexpected status is not an error (see
+// URLTestOutcome).
 func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, err error) {
-	var satisfied bool
+	t, _, _, err = p.urlTest(ctx, url, expectedStatus)
+	return t, err
+}
 
+// URLTestOutcome implements URLTestOutcomeProvider.
+func (p *Proxy) URLTestOutcome(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (URLTestOutcome, error) {
+	t, satisfied, status, err := p.urlTest(ctx, url, expectedStatus)
+	return URLTestOutcome{Delay: t, Satisfied: satisfied, HTTPStatus: status}, err
+}
+
+func (p *Proxy) clock() time.Time {
+	if p.now != nil {
+		return p.now()
+	}
+	return time.Now()
+}
+
+// urlTestAdmission, when set, runs before every URL test's dial. Hako's iOS
+// Network Extension arms it with a memory pacing gate;
+// nil — the default everywhere else — keeps urlTest exactly upstream. A
+// non-nil error skips the test entirely: urlTest returns it before the
+// history/alive bookkeeping registers, so a skipped probe leaves the node's
+// last known state untouched (first v2 device round: 1077 probes rewritten
+// into fake timeouts during storm windows).
+var urlTestAdmission = atomic.NewTypedValue[func(ctx context.Context) error](nil)
+
+// ErrURLTestDeferred is what an armed admission gate returns for a probe it
+// chose to skip (background health checks under memory pressure). The probe
+// records nothing; the next scheduled check retries.
+var ErrURLTestDeferred = errors.New("url test deferred: memory admission")
+
+// SetURLTestAdmission installs f on the URL-test choke point shared by API
+// probes, group tests and provider health checks. Pass nil to disarm.
+func SetURLTestAdmission(f func(ctx context.Context) error) {
+	urlTestAdmission.Store(f)
+}
+
+// backgroundProbeKey marks a context whose URL tests are background work
+// (scheduled health checks), free to be skipped under memory pressure.
+type backgroundProbeKey struct{}
+
+// WithBackgroundProbe marks ctx's URL tests as background work.
+func WithBackgroundProbe(ctx context.Context) context.Context {
+	return context.WithValue(ctx, backgroundProbeKey{}, true)
+}
+
+// IsBackgroundProbe reports whether ctx carries the background mark.
+func IsBackgroundProbe(ctx context.Context) bool {
+	v, _ := ctx.Value(backgroundProbeKey{}).(bool)
+	return v
+}
+
+func (p *Proxy) urlTest(ctx context.Context, url string, expectedStatus utils.IntRanges[uint16]) (t uint16, satisfied bool, status int, err error) {
+	// The admission gate runs before the deferred bookkeeping registers: a
+	// probe the gate defers returns here with the node's history and alive
+	// state untouched.
+	if admit := urlTestAdmission.Load(); admit != nil {
+		if admitErr := admit(ctx); admitErr != nil {
+			return 0, false, 0, admitErr
+		}
+	}
 	defer func() {
 		alive := err == nil
 		record := C.DelayHistory{Time: time.Now()}
@@ -206,7 +292,7 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 		return
 	}
 
-	start := time.Now()
+	start := p.clock()
 	instance, err := p.DialContext(ctx, &addr)
 	if err != nil {
 		return
@@ -251,13 +337,18 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	resp, err := client.Do(req)
 
 	if err != nil {
+		// net/http hands back a *url.Error carrying the whole URL, and this
+		// error is serialised to the API and into the log -- so a health-check
+		// URL whose PATH is the account (`https://host/<token>`) would arrive
+		// there intact. Name the target by address and keep the cause.
+		err = fmt.Errorf("%s: %w", url, err)
 		return
 	}
 
 	_ = resp.Body.Close()
 
 	if unifiedDelay {
-		second := time.Now()
+		second := p.clock()
 		var ignoredErr error
 		var secondResp *http.Response
 		secondResp, ignoredErr = client.Do(req)
@@ -267,6 +358,9 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 			start = second
 		} else {
 			if strings.HasPrefix(url, "http://") {
+				// The URL is the user's, and the error net/http hands back is a
+				// *url.Error that prints the whole of it again: name the target
+				// by address and take the URL out of the cause.
 				log.Errorln("%s failed to get the second response from %s: %v", p.Name(), url, ignoredErr)
 				log.Warnln("It is recommended to use HTTPS for provider.health-check.url and group.url to ensure better reliability. Due to some proxy providers hijacking test addresses and not being compatible with repeated HEAD requests, using HTTP may result in failed tests.")
 			}
@@ -274,7 +368,20 @@ func (p *Proxy) URLTest(ctx context.Context, url string, expectedStatus utils.In
 	}
 
 	satisfied = resp != nil && (expectedStatus == nil || expectedStatus.Check(uint16(resp.StatusCode)))
-	t = uint16(time.Since(start) / time.Millisecond)
+	if resp != nil {
+		status = resp.StatusCode
+	}
+	t = uint16(p.clock().Sub(start) / time.Millisecond)
+	// A local or edge target can answer in under a millisecond, and
+	// hub/route/proxies.go reads a zero delay as the failure sentinel
+	// (`err != nil || delay == 0`), so upstream's truncation turned a real
+	// fast answer into a failed test. Report the minimum representable delay
+	// for a measurement that did happen. This repairs that upstream reading;
+	// it is not in service of bind/hako's -1, which is produced from the
+	// error, never from zero.
+	if t == 0 {
+		t = 1
+	}
 	return
 }
 

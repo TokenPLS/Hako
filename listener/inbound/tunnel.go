@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	C "github.com/metacubex/mihomo/constant"
-	LT "github.com/metacubex/mihomo/listener/tunnel"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/TokenPLS/Hako/constant"
+	LT "github.com/TokenPLS/Hako/listener/tunnel"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type TunnelOption struct {

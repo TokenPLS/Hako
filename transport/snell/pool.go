@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/mihomo/component/pool"
-	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
+	"github.com/TokenPLS/Hako/component/pool"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/shadowaead"
 )
 
 type Pool struct {

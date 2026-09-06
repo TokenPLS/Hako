@@ -184,7 +184,6 @@ func TestUnmarshallJSON(t *testing.T) {
 	})
 }
 
-// const specialCharacters = "\\\\/\"\b\f\n\r\t\x00\uffff\ufffd世界\u007f\u00ff\U0010FFFF"
 const specialCharacters = "\uffff\ufffd世界\u007f\u00ff\U0010FFFF"
 
 func TestJSONSpecialCharacters(t *testing.T) {

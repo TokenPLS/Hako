@@ -3,9 +3,9 @@ package config
 import (
 	"encoding/json"
 
-	"github.com/metacubex/mihomo/listener/reality"
-	"github.com/metacubex/mihomo/listener/sing"
-	"github.com/metacubex/mihomo/transport/tlsmirror"
+	"github.com/TokenPLS/Hako/listener/reality"
+	"github.com/TokenPLS/Hako/listener/sing"
+	"github.com/TokenPLS/Hako/transport/tlsmirror"
 )
 
 type VmessUser struct {

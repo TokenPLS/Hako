@@ -7,14 +7,14 @@ import (
 	"net"
 	"strconv"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/shadowsocks/core"
-	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
-	"github.com/metacubex/mihomo/transport/shadowsocks/shadowstream"
-	"github.com/metacubex/mihomo/transport/socks5"
-	"github.com/metacubex/mihomo/transport/ssr/obfs"
-	"github.com/metacubex/mihomo/transport/ssr/protocol"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/core"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/shadowaead"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/shadowstream"
+	"github.com/TokenPLS/Hako/transport/socks5"
+	"github.com/TokenPLS/Hako/transport/ssr/obfs"
+	"github.com/TokenPLS/Hako/transport/ssr/protocol"
 )
 
 type ShadowSocksR struct {
@@ -108,7 +108,7 @@ func (ssr *ShadowSocksR) ProxyInfo() C.ProxyInfo {
 
 func NewShadowSocksR(option ShadowSocksROption) (*ShadowSocksR, error) {
 	// SSR protocol compatibility
-	// https://github.com/metacubex/mihomo/pull/2056
+	// https://github.com/TokenPLS/Hako/pull/2056
 	if option.Cipher == "none" {
 		option.Cipher = "dummy"
 	}

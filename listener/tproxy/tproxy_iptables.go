@@ -6,9 +6,9 @@ import (
 	"net"
 	"runtime"
 
-	"github.com/metacubex/mihomo/common/cmd"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/cmd"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/log"
 )
 
 var (

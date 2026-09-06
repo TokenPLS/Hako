@@ -3,7 +3,7 @@ package config
 import (
 	"net/netip"
 
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/TokenPLS/Hako/constant"
 
 	"go4.org/netipx"
 	"golang.org/x/exp/slices"

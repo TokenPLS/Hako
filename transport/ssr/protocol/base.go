@@ -9,10 +9,10 @@ import (
 	"encoding/binary"
 	"sync"
 
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/ntp"
-	"github.com/metacubex/mihomo/transport/shadowsocks/core"
+	"github.com/TokenPLS/Hako/common/pool"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/ntp"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/core"
 
 	"github.com/metacubex/randv2"
 )

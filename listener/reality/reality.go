@@ -10,11 +10,11 @@ import (
 	"runtime/debug"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/inner"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/ntp"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/listener/inner"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/ntp"
 
 	utls "github.com/metacubex/utls"
 )

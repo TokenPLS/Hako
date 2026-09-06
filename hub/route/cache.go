@@ -1,7 +1,7 @@
 package route
 
 import (
-	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/TokenPLS/Hako/component/resolver"
 
 	"github.com/metacubex/chi"
 	"github.com/metacubex/chi/render"

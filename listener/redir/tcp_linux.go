@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/TokenPLS/Hako/transport/socks5"
 
 	"golang.org/x/sys/unix"
 )

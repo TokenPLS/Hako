@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/netip"
 
-	"github.com/metacubex/mihomo/common/lru"
-	"github.com/metacubex/mihomo/component/fakeip"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/common/lru"
+	"github.com/TokenPLS/Hako/component/fakeip"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 type ResolverEnhancer struct {
@@ -190,3 +190,27 @@ func NewEnhancer(cfg EnhancerConfig) *ResolverEnhancer {
 
 	return e
 }
+
+// UseHosts reports whether the hosts middleware is in the chain, and ShouldSkipFakeIP
+// answers the same question withFakeIP asks before it allocates.
+//
+// Both exist so a caller one layer below the middlewares -- Explain -- can tell that a
+// name never reaches the resolver at all. The skipper returned here is the SAME instance
+// newHandler hands to withFakeIP (middleware.go:241), so this is the middleware's own
+// verdict rather than a reconstruction of it.
+func (h *ResolverEnhancer) UseHosts() bool { return h.useHosts }
+
+func (h *ResolverEnhancer) ShouldSkipFakeIP(host string) bool {
+	if h.fakeIPSkipper == nil {
+		return false
+	}
+	return h.fakeIPSkipper.ShouldSkipped(host)
+}
+
+// IPv6 reports whether AAAA questions are answered at all.
+//
+// withResolver returns an empty answer for AAAA when this is false, BEFORE reaching the
+// resolver (dns/middleware.go:205), and mihomo defaults dns.ipv6 to false -- so on most
+// configurations every AAAA question is answered above the resolver and naming resolvers
+// for it is naming servers that are never asked.
+func (h *ResolverEnhancer) IPv6() bool { return h.ipv6 }

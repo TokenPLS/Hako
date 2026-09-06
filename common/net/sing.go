@@ -4,7 +4,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/metacubex/mihomo/common/net/deadline"
+	"github.com/TokenPLS/Hako/common/net/deadline"
 
 	"github.com/metacubex/sing/common"
 	"github.com/metacubex/sing/common/bufio"
@@ -74,7 +74,7 @@ func Relay(leftConn, rightConn net.Conn) {
 
 	ch := make(chan struct{})
 	go func() {
-		_, err := bufio.Copy(leftConn, rightConn)
+		_, err := relayCopy(leftConn, rightConn)
 		if err == nil {
 			_ = closeWrite(leftConn)
 		} else {
@@ -83,7 +83,7 @@ func Relay(leftConn, rightConn net.Conn) {
 		close(ch)
 	}()
 
-	_, err := bufio.Copy(rightConn, leftConn)
+	_, err := relayCopy(rightConn, leftConn)
 	if err == nil {
 		_ = closeWrite(rightConn)
 	} else {

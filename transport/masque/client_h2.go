@@ -13,8 +13,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/common/contextutils"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/contextutils"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go/quicvarint"

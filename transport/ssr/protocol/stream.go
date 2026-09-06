@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"net"
 
-	"github.com/metacubex/mihomo/common/pool"
+	"github.com/TokenPLS/Hako/common/pool"
 )
 
 type Conn struct {

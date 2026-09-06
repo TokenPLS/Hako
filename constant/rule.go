@@ -40,6 +40,8 @@ const (
 	AND
 	OR
 	NOT
+	SourceAppSigningID
+	SourceAppTeamID
 )
 
 type RuleType int
@@ -118,6 +120,10 @@ func (rt RuleType) String() string {
 		return "OR"
 	case NOT:
 		return "NOT"
+	case SourceAppSigningID:
+		return "SourceAppSigningID"
+	case SourceAppTeamID:
+		return "SourceAppTeamID"
 	default:
 		return "Unknown"
 	}

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/ech"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/tuic"
-	"github.com/metacubex/mihomo/transport/tuic/common"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/ech"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/tuic"
+	"github.com/TokenPLS/Hako/transport/tuic/common"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/quic-go"

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/metacubex/mihomo/common/utils"
+	"github.com/TokenPLS/Hako/common/utils"
 	"github.com/openacid/low/bitmap"
 )
 

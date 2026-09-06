@@ -5,8 +5,8 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/TokenPLS/Hako/common/atomic"
+	"github.com/TokenPLS/Hako/component/resolver"
 )
 
 var (

@@ -6,14 +6,14 @@ import (
 	"net"
 	"strconv"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/structure"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/jls"
-	"github.com/metacubex/mihomo/transport/restls"
-	"github.com/metacubex/mihomo/transport/shadowtls"
-	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
-	"github.com/metacubex/mihomo/transport/snell"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/structure"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/jls"
+	"github.com/TokenPLS/Hako/transport/restls"
+	"github.com/TokenPLS/Hako/transport/shadowtls"
+	obfs "github.com/TokenPLS/Hako/transport/simple-obfs"
+	"github.com/TokenPLS/Hako/transport/snell"
 )
 
 type Snell struct {

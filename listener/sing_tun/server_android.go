@@ -6,10 +6,10 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/component/process"
+	"github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/constant/features"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/sing-tun"
 )

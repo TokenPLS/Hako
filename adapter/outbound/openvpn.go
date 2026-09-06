@@ -10,13 +10,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/contextutils"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/dns"
-	"github.com/metacubex/mihomo/log"
-	ovpn "github.com/metacubex/mihomo/transport/openvpn"
+	"github.com/TokenPLS/Hako/common/contextutils"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/dns"
+	"github.com/TokenPLS/Hako/log"
+	ovpn "github.com/TokenPLS/Hako/transport/openvpn"
 
 	"golang.org/x/sync/semaphore"
 )

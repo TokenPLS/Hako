@@ -6,11 +6,11 @@ import (
 	"net/netip"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/pool"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type Dns struct {

@@ -7,12 +7,12 @@ import (
 
 	"github.com/dlclark/regexp2"
 
-	"github.com/metacubex/mihomo/adapter/provider"
-	"github.com/metacubex/mihomo/common/structure"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/adapter/provider"
+	"github.com/TokenPLS/Hako/common/structure"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	"github.com/TokenPLS/Hako/log"
 )
 
 var (

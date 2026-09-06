@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/gofrs/uuid/v5"
 	mux "github.com/metacubex/sing-mux"

@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/dialer"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/dialer"
 )
 
 // Adapter Type

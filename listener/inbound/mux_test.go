@@ -3,7 +3,7 @@ package inbound_test
 import (
 	"testing"
 
-	"github.com/metacubex/mihomo/adapter/outbound"
+	"github.com/TokenPLS/Hako/adapter/outbound"
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/exp/slices"

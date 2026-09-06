@@ -3,7 +3,7 @@ package kcptun
 import (
 	"crypto/sha1"
 
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/kcp-go"
 	"golang.org/x/crypto/pbkdf2"

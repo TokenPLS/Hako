@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"sync"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
 
 	mieruclient "github.com/enfein/mieru/v3/apis/client"
 	mierucommon "github.com/enfein/mieru/v3/apis/common"

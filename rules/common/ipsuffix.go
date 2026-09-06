@@ -3,7 +3,7 @@ package common
 import (
 	"net/netip"
 
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 type IPSuffix struct {

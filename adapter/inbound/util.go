@@ -5,8 +5,8 @@ import (
 	"net/netip"
 	"strings"
 
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/socks5"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/socks5"
 
 	"github.com/metacubex/http"
 )

@@ -3,8 +3,8 @@ package geodata
 import (
 	"fmt"
 
-	"github.com/metacubex/mihomo/component/geodata/router"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/component/geodata/router"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 type loader struct {

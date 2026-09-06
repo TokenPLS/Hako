@@ -13,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/iface"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/sing"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/component/iface"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/sing"
+	"github.com/TokenPLS/Hako/log"
 	"golang.org/x/exp/constraints"
 
 	tun "github.com/metacubex/sing-tun"
@@ -38,6 +38,12 @@ import (
 
 var InterfaceName = "Meta"
 var EnforceBindInterface = false
+
+// IncludeAllNetworks tells sing-tun that the tunnel runs under Apple's Include All
+// Networks, where only the gVisor stack carries traffic; sing-tun then refuses `system`
+// and `mixed` at Start instead of letting them run silently. Set by the Apple binding
+// from the tunnel's installed configuration before Start; false everywhere else.
+var IncludeAllNetworks = false
 
 type Listener struct {
 	closed  bool
@@ -154,7 +160,10 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		options.Device = tunName
 	}
 	forwarderBindInterface := false
-	if options.FileDescriptor > 0 {
+	// Hako's App Store data plane feeds gVisor through a public
+	// NEPacketTunnelFlow -> SOCK_DGRAM bridge. That descriptor is intentionally
+	// not an Apple utun fd, so do not execute the utun-only getsockopt probe.
+	if options.FileDescriptor > 0 && options.Device != "hako-packet-flow" {
 		if tunnelName, err := getTunnelName(int32(options.FileDescriptor)); err == nil {
 			tunName = tunnelName // sing-tun must have the truth tun interface name even it from a fd
 			//forwarderBindInterface = true
@@ -497,6 +506,7 @@ func New(options LC.Tun, tunnel C.Tunnel, additions ...inbound.Addition) (l *Lis
 		ForwarderBindInterface: forwarderBindInterface,
 		InterfaceFinder:        interfaceFinder,
 		EnforceBindInterface:   EnforceBindInterface,
+		IncludeAllNetworks:     IncludeAllNetworks,
 	}
 	l.tunIf = tunIf
 

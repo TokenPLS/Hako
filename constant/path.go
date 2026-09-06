@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/constant/features"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/constant/features"
 )
 
 const Name = "mihomo"
@@ -130,7 +130,6 @@ func (p *path) MMDB() string {
 	}
 	for _, fi := range files {
 		if fi.IsDir() {
-			// 目录则直接跳过
 			continue
 		} else {
 			if strings.EqualFold(fi.Name(), "Country.mmdb") ||
@@ -151,7 +150,6 @@ func (p *path) ASN() string {
 	}
 	for _, fi := range files {
 		if fi.IsDir() {
-			// 目录则直接跳过
 			continue
 		} else {
 			if strings.EqualFold(fi.Name(), "ASN.mmdb") {
@@ -170,7 +168,6 @@ func (p *path) BundleMRS() string {
 	}
 	for _, fi := range files {
 		if fi.IsDir() {
-			// 目录则直接跳过
 			continue
 		} else {
 			if strings.EqualFold(fi.Name(), "BundleMRS.7z") {
@@ -197,7 +194,6 @@ func (p *path) GeoIP() string {
 	}
 	for _, fi := range files {
 		if fi.IsDir() {
-			// 目录则直接跳过
 			continue
 		} else {
 			if strings.EqualFold(fi.Name(), "GeoIP.dat") {
@@ -216,7 +212,6 @@ func (p *path) GeoSite() string {
 	}
 	for _, fi := range files {
 		if fi.IsDir() {
-			// 目录则直接跳过
 			continue
 		} else {
 			if strings.EqualFold(fi.Name(), "GeoSite.dat") {

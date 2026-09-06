@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	C "github.com/metacubex/mihomo/constant"
-	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
+	C "github.com/TokenPLS/Hako/constant"
+	mihomoVMess "github.com/TokenPLS/Hako/transport/vmess"
 
 	"github.com/metacubex/smux"
 )

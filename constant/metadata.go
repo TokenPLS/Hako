@@ -188,30 +188,36 @@ func (t Type) MarshalJSON() ([]byte, error) {
 
 // Metadata is used to store connection address
 type Metadata struct {
-	NetWork      NetWork    `json:"network"`
-	Type         Type       `json:"type"`
-	SrcIP        netip.Addr `json:"sourceIP"`
-	DstIP        netip.Addr `json:"destinationIP"`
-	SrcGeoIP     []string   `json:"sourceGeoIP"`      // can be nil if never queried, empty slice if got no result
-	DstGeoIP     []string   `json:"destinationGeoIP"` // can be nil if never queried, empty slice if got no result
-	SrcIPASN     string     `json:"sourceIPASN"`
-	DstIPASN     string     `json:"destinationIPASN"`
-	SrcPort      uint16     `json:"sourcePort,string"`      // `,string` is used to compatible with old version json output
-	DstPort      uint16     `json:"destinationPort,string"` // `,string` is used to compatible with old version json output
-	InIP         netip.Addr `json:"inboundIP"`
-	InPort       uint16     `json:"inboundPort,string"` // `,string` is used to compatible with old version json output
-	InName       string     `json:"inboundName"`
-	InUser       string     `json:"inboundUser"`
-	RematchName  string     `json:"rematchName"`
-	Host         string     `json:"host"`
-	DNSMode      DNSMode    `json:"dnsMode"`
-	Uid          uint32     `json:"uid"`
-	Process      string     `json:"process"`
-	ProcessPath  string     `json:"processPath"`
-	SpecialProxy string     `json:"specialProxy"`
-	SpecialRules string     `json:"specialRules"`
-	RemoteDst    string     `json:"remoteDestination"`
-	DSCP         uint8      `json:"dscp"`
+	NetWork     NetWork    `json:"network"`
+	Type        Type       `json:"type"`
+	SrcIP       netip.Addr `json:"sourceIP"`
+	DstIP       netip.Addr `json:"destinationIP"`
+	SrcGeoIP    []string   `json:"sourceGeoIP"`      // can be nil if never queried, empty slice if got no result
+	DstGeoIP    []string   `json:"destinationGeoIP"` // can be nil if never queried, empty slice if got no result
+	SrcIPASN    string     `json:"sourceIPASN"`
+	DstIPASN    string     `json:"destinationIPASN"`
+	SrcPort     uint16     `json:"sourcePort,string"`      // `,string` is used to compatible with old version json output
+	DstPort     uint16     `json:"destinationPort,string"` // `,string` is used to compatible with old version json output
+	InIP        netip.Addr `json:"inboundIP"`
+	InPort      uint16     `json:"inboundPort,string"` // `,string` is used to compatible with old version json output
+	InName      string     `json:"inboundName"`
+	InUser      string     `json:"inboundUser"`
+	RematchName string     `json:"rematchName"`
+	Host        string     `json:"host"`
+	DNSMode     DNSMode    `json:"dnsMode"`
+	Uid         uint32     `json:"uid"`
+	UidKnown    bool       `json:"uidKnown"`
+	Process     string     `json:"process"`
+	ProcessPath string     `json:"processPath"`
+	// SourceIdentityKnown distinguishes an absent Apple audit token from a
+	// valid identity whose signed code legitimately has no Team ID.
+	SourceIdentityKnown        bool   `json:"sourceIdentityKnown"`
+	SourceAppSigningIdentifier string `json:"sourceAppSigningIdentifier"`
+	SourceAppTeamIdentifier    string `json:"sourceAppTeamIdentifier"`
+	SpecialProxy               string `json:"specialProxy"`
+	SpecialRules               string `json:"specialRules"`
+	RemoteDst                  string `json:"remoteDestination"`
+	DSCP                       uint8  `json:"dscp"`
 
 	RawSrcAddr net.Addr `json:"-"`
 	RawDstAddr net.Addr `json:"-"`
@@ -237,15 +243,21 @@ func (m *Metadata) SourceDetail() string {
 	}
 
 	switch {
-	case m.Process != "" && m.Uid != 0:
+	case m.Process != "" && m.HasUID():
 		return fmt.Sprintf("%s(%s, uid=%d)", m.SourceAddress(), m.Process, m.Uid)
-	case m.Uid != 0:
+	case m.HasUID():
 		return fmt.Sprintf("%s(uid=%d)", m.SourceAddress(), m.Uid)
 	case m.Process != "":
 		return fmt.Sprintf("%s(%s)", m.SourceAddress(), m.Process)
 	default:
 		return fmt.Sprintf("%s", m.SourceAddress())
 	}
+}
+
+// HasUID preserves compatibility with existing non-zero metadata producers
+// while allowing an explicit presence bit to represent the valid root UID 0.
+func (m *Metadata) HasUID() bool {
+	return m.UidKnown || m.Uid != 0
 }
 
 func (m *Metadata) SourceValid() bool {

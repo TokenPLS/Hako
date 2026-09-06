@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/inner"
-	"github.com/metacubex/mihomo/listener/sing"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/socks5"
-	"github.com/metacubex/mihomo/transport/sudoku"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/inner"
+	"github.com/TokenPLS/Hako/listener/sing"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/transport/socks5"
+	"github.com/TokenPLS/Hako/transport/sudoku"
 )
 
 type Listener struct {

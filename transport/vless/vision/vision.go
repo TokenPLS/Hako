@@ -12,10 +12,10 @@ import (
 	"reflect"
 	"unsafe"
 
-	N "github.com/metacubex/mihomo/common/net"
-	tlsC "github.com/metacubex/mihomo/component/tls"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/vless/encryption"
+	N "github.com/TokenPLS/Hako/common/net"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/transport/vless/encryption"
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/metacubex/tls"

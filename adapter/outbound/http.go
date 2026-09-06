@@ -9,9 +9,9 @@ import (
 	"net"
 	"strconv"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/ca"
-	C "github.com/metacubex/mihomo/constant"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/ca"
+	C "github.com/TokenPLS/Hako/constant"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/tls"
@@ -165,6 +165,19 @@ func NewHttp(option HttpOption) (*Http, error) {
 		})
 		if err != nil {
 			return nil, err
+		}
+		// An HTTP proxy tunnels each proxied connection over its OWN new TLS
+		// connection (HTTP CONNECT does not multiplex), so without session
+		// resumption every proxied connection pays a full TLS handshake -- and on
+		// iOS that is a SecTrustEvaluate/trustd verification per connection, a storm
+		// under load. Arm a session cache so repeated dials to this proxy resume: a
+		// resumed handshake does not re-send the server certificate, so verification
+		// is preserved (a MITM without the session key still gets a full, verified
+		// handshake) while the redundant per-connection cost is skipped. Scoped to
+		// this TCP HTTP proxy on purpose -- QUIC proxies manage their own session
+		// tickets and must not be given a ClientSessionCache here.
+		if tlsConfig.ClientSessionCache == nil {
+			tlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(0)
 		}
 	}
 

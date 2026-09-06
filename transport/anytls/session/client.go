@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/mihomo/transport/anytls/padding"
-	"github.com/metacubex/mihomo/transport/anytls/skiplist"
-	"github.com/metacubex/mihomo/transport/anytls/util"
+	"github.com/TokenPLS/Hako/transport/anytls/padding"
+	"github.com/TokenPLS/Hako/transport/anytls/skiplist"
+	"github.com/TokenPLS/Hako/transport/anytls/util"
 )
 
 type Client struct {
@@ -87,7 +87,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 		return nil, fmt.Errorf("failed to create stream: %w", err)
 	}
 
-	stream.dieHook = func() {
+	stream.setDieHook(func() {
 		// If Session is not closed, put this Stream to pool
 		if !session.IsClosed() {
 			if c.disableReuse {
@@ -106,7 +106,7 @@ func (c *Client) CreateStream(ctx context.Context) (net.Conn, error) {
 				c.idleSessionLock.Unlock()
 			}
 		}
-	}
+	})
 
 	return stream, nil
 }

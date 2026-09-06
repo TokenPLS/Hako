@@ -9,16 +9,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter"
-	"github.com/metacubex/mihomo/common/convert"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/common/yaml"
-	"github.com/metacubex/mihomo/component/age"
-	"github.com/metacubex/mihomo/component/profile/cachefile"
-	"github.com/metacubex/mihomo/component/resource"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	"github.com/metacubex/mihomo/tunnel/statistic"
+	"github.com/TokenPLS/Hako/adapter"
+	"github.com/TokenPLS/Hako/common/convert"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/common/yaml"
+	"github.com/TokenPLS/Hako/component/age"
+	"github.com/TokenPLS/Hako/component/profile/cachefile"
+	"github.com/TokenPLS/Hako/component/resource"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	"github.com/TokenPLS/Hako/tunnel/statistic"
 
 	"github.com/dlclark/regexp2"
 	"github.com/metacubex/http"
@@ -142,6 +142,13 @@ func (pp *proxySetProvider) MarshalJSON() ([]byte, error) {
 
 func (pp *proxySetProvider) Name() string {
 	return pp.Fetcher.Name()
+}
+
+// SideUpdate feeds a payload obtained elsewhere into the live provider: parsed,
+// written to the vehicle path, applied through the same path a pull uses.
+func (pp *proxySetProvider) SideUpdate(payload []byte) error {
+	_, _, err := pp.Fetcher.SideUpdate(payload)
+	return err
 }
 
 func (pp *proxySetProvider) Update() error {

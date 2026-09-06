@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"net/netip"
+	"reflect"
+	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/arc"
-	"github.com/metacubex/mihomo/common/lru"
-	"github.com/metacubex/mihomo/common/singleflight"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/trie"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/arc"
+	"github.com/TokenPLS/Hako/common/lru"
+	"github.com/TokenPLS/Hako/common/singleflight"
+	"github.com/TokenPLS/Hako/component/resolver"
+	"github.com/TokenPLS/Hako/component/trie"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
@@ -48,6 +50,32 @@ type Resolver struct {
 	cache                 dnsCache
 	policy                []dnsPolicy
 	defaultResolver       *Resolver
+	// queryMu guards the context every upstream query runs under -- live caller queries and
+	// detached cache refreshes alike, because singleflight shares ONE fn between them and that
+	// fn's context is what governs the actual client call. There is no way to give the two
+	// different lifetimes at that level, and pretending otherwise is what broke.
+	//
+	// It used to be context.Background(), so nothing could stop a query: a shutdown could not,
+	// and up to one DNS timeout of goroutines survived the core they belonged to. The first
+	// attempt at fixing that tied the fn to a context ResetConnection cancels, which fixed
+	// shutdown and broke something worse: component/resolver.ResetConnection fans out as
+	// `go r.ResetConnection()`, so it races whatever is in flight, and on Apple it fires on
+	// every default-interface change. Every Wi-Fi to cellular switch handed the caller a
+	// SERVFAIL for a lookup whose upstream was fine.
+	//
+	// So the lifetime is the CORE's, cancelled by CloseQueries and by nothing else. That is
+	// upstream's shape: sing-box's queries run under the service context given to NewClient,
+	// and ResetNetwork drops connections and clears the cache without touching it. Cancelling
+	// queries on a path change was ours alone, and the repository's own older controlled DNS
+	// interop tests said so by going red.
+	queryMu     sync.Mutex
+	queryCtx    context.Context
+	queryCancel context.CancelFunc
+	// queryClosed makes CloseQueries one-way. Without it, cancelling a live query at shutdown
+	// synthesised a replacement: the retry branch in exchangeWithoutCache and the
+	// context.Canceled arm of ExchangeContext's defer both call queryContext again, which used
+	// to build a fresh live context on demand.
+	queryClosed bool
 }
 
 func (r *Resolver) LookupIPPrimaryIPv4(ctx context.Context, host string) (ips []netip.Addr, err error) {
@@ -156,8 +184,9 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 	continueFetch := false
 	defer func() {
 		if continueFetch || errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			parent := r.queryContext()
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout)
+				ctx, cancel := context.WithTimeout(parent, resolver.DefaultDNSTimeout)
 				defer cancel()
 				_, _ = r.exchangeWithoutCache(ctx, m) // ignore result, just for putMsgToCache
 			}()
@@ -166,6 +195,19 @@ func (r *Resolver) ExchangeContext(ctx context.Context, m *D.Msg) (msg *D.Msg, e
 
 	q := m.Question[0]
 	domain := msgToDomain(m)
+	// mihomo's cache-hit branch verbatim (dns/resolver.go:169-181 at v1.19.29). Three things
+	// this core used to do differently, all removed under one rule -- what mihomo does is what
+	// we do:
+	//
+	//   - the remaining TTL was clamped at zero. mihomo reads the clock a SECOND time here,
+	//     via time.Until, so an entry expiring between the check above and this line yields a
+	//     negative value that wraps to roughly four billion seconds. That is a real defect and
+	//     it is inherited on purpose: fixing it here is still behaving differently from the
+	//     upstream a reader's configuration was written for, and the fix belongs upstream.
+	//   - an expired entry was bounded by an optimistic window. mihomo has no window; it
+	// serves the stale answer and refetches, however old ('s finding: the cache is
+	//     built WithStale(true) and no WithAge, so staleness has no upper bound at all).
+	//   - a hard miss evicted the key. mihomo never evicts here.
 	msg, expireTime, hit := getMsgFromCache(r.cache, q)
 	if hit {
 		log.Debugln("[DNS] cache hit %s --> %s, expire at %s", domain, msgToLogString(msg), expireTime.Format("2006-01-02 15:04:05"))
@@ -189,7 +231,21 @@ func (r *Resolver) exchangeWithoutCache(ctx context.Context, m *D.Msg) (msg *D.M
 	retryNum := 0
 	retryMax := 3
 	fn := func() (result *D.Msg, err error) {
-		ctx, cancel := context.WithTimeout(context.Background(), resolver.DefaultDNSTimeout) // reset timeout in singleflight
+		// Rooted at the resolver's own context, not context.Background().
+		//
+		// Re-rooting away from the CALLER is deliberate and must stay: singleflight shares
+		// one fn across every caller waiting on the same question, so tying it to one
+		// caller's context would let that caller's cancellation kill everybody else's
+		// query. But Background() threw away the process lifetime along with the caller's,
+		// which meant no in-flight upstream query was cancellable by anything --
+		// shutdownCore could not stop one, and neither could a path change. Queries
+		// outlived the core they belonged to, talking to upstreams over a path being torn
+		// down. A resolver-scoped parent keeps the independence from callers and gives back
+		// the lifetime.
+		//
+		// It must be queryContext and NOT refetchContext: this fn serves live callers, and the
+		// refetch context is cancelled on every ResetConnection. See queryMu.
+		ctx, cancel := context.WithTimeout(r.queryContext(), resolver.DefaultDNSTimeout)
 		defer cancel()
 		cache := false
 
@@ -396,17 +452,90 @@ func (r *Resolver) ClearCache() {
 	}
 }
 
+// ResetConnection drops the live upstream connections of every client this resolver can
+// use, so the next query re-dials on the current network path.
+//
+// r.policy used to be skipped. That is invisible from the resolution path -- Match is all
+// resolution needs -- so a nameserver-policy entry's tls/https/quic clients kept sockets
+// scoped to the previous path across a network change. The blast radius is one degraded
+// query, because all three stateful transports self-heal on their first failure, but the
+// omission is the kind that only an enumeration can prevent.
+//
+// Identity is the RAW transport, not the client handed out. Since v1.19.30 NewResolver
+// shares one raw transport between name servers that differ only in wrapper-only params
+// (transportEqual, then rewrapClient re-wraps the same *dnsOverHTTPS per name server), so
+// the same connection can sit behind a main client, a fallback client and a policy client
+// under three different wrappers; and a policy trie stores one insert under two nodes.
+// Resetting per wrapper would reset that transport once per wrapper, and a duplicate that
+// lands after a query has already rebuilt the transport closes the new one. So every
+// client is unwrapped first -- the Unwrap() the wrappers expose for exactly this, the
+// primitive rewrapClient itself uses -- and the reset is issued once per raw transport.
+//
+// The dedup map is keyed only by transports whose dynamic type is comparable. Every raw
+// transport built today is a pointer or a comparable value; the disable-types wrapper is a struct value
+// holding a map and is not -- keying a map[dnsClient] on it is a runtime panic ("hash of
+// unhashable type"), which is what a nameserver-policy entry written as
+// "8.8.8.8#disable-ipv6=true" produced here before this shape, on ApplyConfig, because
+// ApplyConfig ends in ResetConnection. Anything still uncomparable after unwrapping is
+// reset without dedup rather than risked as a key.
 func (r *Resolver) ResetConnection() {
-	if r != nil {
-		for _, c := range r.main {
-			c.ResetConnection()
+	r.resetConnections(make(map[dnsClient]struct{}))
+}
+
+// resetConnections is ResetConnection with the identity set supplied by the caller, so
+// that Resolvers.ResetConnection can span main, proxy and direct with ONE set: NewResolver
+// builds all three from a single nameServerCache, and a raw transport shared across them
+// would otherwise be reset once per resolver that holds it.
+func (r *Resolver) resetConnections(seen map[dnsClient]struct{}) {
+	if r == nil {
+		return
+	}
+	resetOnce := func(c dnsClient) {
+		if c == nil {
+			return
 		}
-		for _, c := range r.fallback {
-			c.ResetConnection()
+		raw := rawTransport(c)
+		if reflect.TypeOf(raw).Comparable() {
+			if _, done := seen[raw]; done {
+				return
+			}
+			seen[raw] = struct{}{}
 		}
-		if dr := r.defaultResolver; dr != nil {
-			dr.ResetConnection()
+		raw.ResetConnection()
+	}
+	for _, c := range r.main {
+		resetOnce(c)
+	}
+	for _, c := range r.fallback {
+		resetOnce(c)
+	}
+	for _, p := range r.policy {
+		for _, c := range p.Clients() {
+			resetOnce(c)
 		}
+	}
+	// Deliberately does NOT cancel in-flight queries: see queryMu. A reset drops the
+	// connections so the NEXT query re-dials on the current path, which is upstream's
+	// ResetNetwork exactly.
+	if dr := r.defaultResolver; dr != nil {
+		dr.resetConnections(seen)
+	}
+}
+
+// rawTransport peels every wrapper layer off c the way rewrapClient does, so callers
+// that need to identify or reset the underlying connection act on the connection and
+// not on one of the several wrappers v1.19.30 may hand out for it.
+func rawTransport(c dnsClient) dnsClient {
+	for {
+		u, ok := c.(interface{ Unwrap() dnsClient })
+		if !ok {
+			return c
+		}
+		inner := u.Unwrap()
+		if inner == nil {
+			return c
+		}
+		c = inner
 	}
 }
 
@@ -509,10 +638,35 @@ func (rs Resolvers) ClearCache() {
 	rs.DirectResolver.ClearCache()
 }
 
+// CloseQueries fans shutdown out to the same three resolvers the other lifecycle methods walk.
+// Missing one here would leave its live queries running past shutdown, which is the whole
+// defect this method exists to prevent -- and the aggregate is exactly where the earlier
+// enumeration bug (r.policy never reached) lived.
+func (rs Resolvers) CloseQueries() {
+	rs.Resolver.CloseQueries()
+	rs.ProxyResolver.CloseQueries()
+	rs.DirectResolver.CloseQueries()
+}
+
+// ContainsResolver reports whether r is one of this aggregate's members, so that
+// component/resolver's lifecycle helpers -- which are handed the aggregate as DefaultResolver
+// and its members as ProxyServerHostResolver / DirectHostResolver -- visit each member once,
+// through the aggregate, and not a second time on its own.
+func (rs Resolvers) ContainsResolver(r resolver.Resolver) bool {
+	for _, member := range []*Resolver{rs.Resolver, rs.ProxyResolver, rs.DirectResolver} {
+		if member != nil && r == resolver.Resolver(member) {
+			return true
+		}
+	}
+	return false
+}
+
 func (rs Resolvers) ResetConnection() {
-	rs.Resolver.ResetConnection()
-	rs.ProxyResolver.ResetConnection()
-	rs.DirectResolver.ResetConnection()
+	// One identity set for the whole aggregate: see resetConnections.
+	seen := make(map[dnsClient]struct{})
+	rs.Resolver.resetConnections(seen)
+	rs.ProxyResolver.resetConnections(seen)
+	rs.DirectResolver.resetConnections(seen)
 }
 
 func NewResolverFromClient(client dnsClient) *Resolver {
@@ -635,3 +789,60 @@ func NewResolver(config Config) (rs Resolvers) {
 }
 
 var ParseNameServer func(servers []string) ([]NameServer, error) // define in config/config.go
+
+// queryContext returns the parent context live caller queries run under, creating it on first
+// use. ResetConnection deliberately does NOT cancel it -- see queryMu for why -- so the only
+// thing that ends a live query early is the caller's own context or CloseQueries.
+//
+// After CloseQueries this returns an ALREADY-CANCELLED context rather than a fresh one, and that
+// is the whole point of queryClosed. Lazily renewing here let shutdown resurrect the very
+// goroutines it had just cancelled: exchangeWithoutCache retries on error (`r.group.DoChan` at
+// the retry branch) and ExchangeContext's defer re-fires on context.Canceled, so cancelling a
+// live query synthesised a fresh one under a brand-new live context -- restoring the
+// outlives-the-core defect from the other direction. Upstream has no equivalent revival: closing
+// the box closes the DNS router and its transports, and nothing rebuilds a service context on
+// demand.
+func (r *Resolver) queryContext() context.Context {
+	r.queryMu.Lock()
+	defer r.queryMu.Unlock()
+	if r.queryClosed {
+		return r.queryCtx
+	}
+	if r.queryCtx == nil || r.queryCtx.Err() != nil {
+		r.queryCtx, r.queryCancel = context.WithCancel(context.Background())
+	}
+	return r.queryCtx
+}
+
+// CloseQueries cancels in-flight live queries as well as detached refreshes. This is the
+// shutdown signal, and it is the ONLY caller allowed to end a live query: a Network Extension
+// can restart in the same process, so up to one DNS timeout of goroutines must not survive the
+// core they belong to. A path change is not a shutdown and must not call this.
+// It is one-way on purpose. A core that has been shut down must not start serving again: the
+// process can host the NEXT core, and that one gets its own Resolver. Leaving the door open is
+// what let a cancelled query be retried straight back into existence.
+func (r *Resolver) CloseQueries() {
+	if r == nil {
+		return
+	}
+	r.queryMu.Lock()
+	cancel := r.queryCancel
+	r.queryClosed = true
+	if r.queryCtx == nil {
+		// Nothing ever queried, so there is no context to cancel -- but queryContext must still
+		// have a dead one to hand out from here on, because it returns r.queryCtx directly once
+		// closed and a nil context would panic in the caller's context.WithTimeout. Building it
+		// under queryMu is safe: context.WithCancel touches nothing this lock guards.
+		dead, cancelDead := context.WithCancel(context.Background())
+		cancelDead()
+		r.queryCtx = dead
+	}
+	r.queryCancel = nil
+	r.queryMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if dr := r.defaultResolver; dr != nil {
+		dr.CloseQueries()
+	}
+}

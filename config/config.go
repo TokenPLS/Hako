@@ -11,35 +11,35 @@ import (
 	"time"
 	_ "unsafe"
 
-	"github.com/metacubex/mihomo/adapter"
-	"github.com/metacubex/mihomo/adapter/outbound"
-	"github.com/metacubex/mihomo/adapter/outboundgroup"
-	"github.com/metacubex/mihomo/adapter/provider"
-	"github.com/metacubex/mihomo/common/orderedmap"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/common/yaml"
-	"github.com/metacubex/mihomo/component/age"
-	"github.com/metacubex/mihomo/component/auth"
-	"github.com/metacubex/mihomo/component/cidr"
-	"github.com/metacubex/mihomo/component/fakeip"
-	"github.com/metacubex/mihomo/component/geodata"
-	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/sniffer"
-	"github.com/metacubex/mihomo/component/trie"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	snifferTypes "github.com/metacubex/mihomo/constant/sniffer"
-	"github.com/metacubex/mihomo/dns"
-	"github.com/metacubex/mihomo/listener"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/log"
-	R "github.com/metacubex/mihomo/rules"
-	RB "github.com/metacubex/mihomo/rules/bundle"
-	RC "github.com/metacubex/mihomo/rules/common"
-	RP "github.com/metacubex/mihomo/rules/provider"
-	RW "github.com/metacubex/mihomo/rules/wrapper"
-	T "github.com/metacubex/mihomo/tunnel"
+	"github.com/TokenPLS/Hako/adapter"
+	"github.com/TokenPLS/Hako/adapter/outbound"
+	"github.com/TokenPLS/Hako/adapter/outboundgroup"
+	"github.com/TokenPLS/Hako/adapter/provider"
+	"github.com/TokenPLS/Hako/common/orderedmap"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/common/yaml"
+	"github.com/TokenPLS/Hako/component/age"
+	"github.com/TokenPLS/Hako/component/auth"
+	"github.com/TokenPLS/Hako/component/cidr"
+	"github.com/TokenPLS/Hako/component/fakeip"
+	"github.com/TokenPLS/Hako/component/geodata"
+	"github.com/TokenPLS/Hako/component/process"
+	"github.com/TokenPLS/Hako/component/resolver"
+	"github.com/TokenPLS/Hako/component/sniffer"
+	"github.com/TokenPLS/Hako/component/trie"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	snifferTypes "github.com/TokenPLS/Hako/constant/sniffer"
+	"github.com/TokenPLS/Hako/dns"
+	"github.com/TokenPLS/Hako/listener"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/log"
+	R "github.com/TokenPLS/Hako/rules"
+	RB "github.com/TokenPLS/Hako/rules/bundle"
+	RC "github.com/TokenPLS/Hako/rules/common"
+	RP "github.com/TokenPLS/Hako/rules/provider"
+	RW "github.com/TokenPLS/Hako/rules/wrapper"
+	T "github.com/TokenPLS/Hako/tunnel"
 
 	"golang.org/x/exp/slices"
 )
@@ -358,6 +358,34 @@ type RawExperimental struct {
 type RawProfile struct {
 	StoreSelected bool `yaml:"store-selected" json:"store-selected"`
 	StoreFakeIP   bool `yaml:"store-fake-ip" json:"store-fake-ip"`
+	// StoreFakeIPSet reports whether the document named store-fake-ip, which
+	// a bool cannot carry: once decoded, an absent key and an explicit false
+	// are the same value. A platform that wants to default the field on --
+	// Hako does, so fake-ip mappings survive a Network Extension restart --
+	// has to distinguish them or it silently overrides a privacy choice, and
+	// the only way to ask afterwards was to parse the whole document a second
+	// time. On a 578KB profile that was 18ms of every tunnel start.
+	StoreFakeIPSet bool `yaml:"-" json:"-"`
+}
+
+// UnmarshalYAML fills RawProfile as the plain decode would -- defaults already
+// in place survive keys the document omits -- and records whether this block
+// named store-fake-ip. A merge key counts as naming it: resolving the anchor
+// would mean walking the document again, and assuming presence keeps
+// mihomo's own default rather than overriding what an anchor may have set.
+func (p *RawProfile) UnmarshalYAML(node *yaml.Node) error {
+	type plain RawProfile
+	if err := node.Decode((*plain)(p)); err != nil {
+		return err
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		switch node.Content[index].Value {
+		case "store-fake-ip", "<<":
+			p.StoreFakeIPSet = true
+			return nil
+		}
+	}
+	return nil
 }
 
 type RawGeoXUrl struct {
@@ -616,6 +644,19 @@ func UnmarshalRawConfig(buf []byte) (*RawConfig, error) {
 	return rawCfg, nil
 }
 
+// StartupProbe, when set, is told the name of each section of ParseRawConfig
+// as it completes. It exists for one consumer -- the iOS Network Extension,
+// which has to explain a startup budget measured in milliseconds -- and is nil
+// everywhere else, so the parse path pays one pointer test per section. A
+// probe must be cheap and must not touch the configuration.
+var StartupProbe func(section string)
+
+func probe(section string) {
+	if StartupProbe != nil {
+		StartupProbe(section)
+	}
+}
+
 func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config := &Config{}
 	log.Infoln("Start initial configuration in progress") //Segment finished in xxm
@@ -626,6 +667,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.General = general
+	probe("general")
 
 	// We need to temporarily apply some configuration in general and roll back after parsing the complete configuration.
 	// The loading and downloading of geodata in the parseRules and parseRuleProviders rely on these.
@@ -638,36 +680,42 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.Controller = controller
+	probe("controller")
 
 	experimental, err := parseExperimental(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.Experimental = experimental
+	probe("experimental")
 
 	iptables, err := parseIPTables(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.IPTables = iptables
+	probe("iptables")
 
 	ntpCfg, err := parseNTP(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.NTP = ntpCfg
+	probe("ntp")
 
 	profile, err := parseProfile(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.Profile = profile
+	probe("profile")
 
 	tlsCfg, err := parseTLS(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.TLS = tlsCfg
+	probe("tls")
 
 	proxies, providers, err := parseProxies(rawCfg)
 	if err != nil {
@@ -675,12 +723,14 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	}
 	config.Proxies = proxies
 	config.Providers = providers
+	probe("proxies")
 
 	listeners, err := parseListeners(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.Listeners = listeners
+	probe("listeners")
 
 	log.Infoln("Geodata Loader mode: %s", geodata.LoaderName())
 	log.Infoln("Geosite Matcher implementation: %s", geodata.SiteMatcherName())
@@ -689,24 +739,28 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.RuleProviders = ruleProviders
+	probe("rule-providers")
 
 	subRules, err := parseSubRules(rawCfg, proxies, ruleProviders)
 	if err != nil {
 		return nil, err
 	}
 	config.SubRules = subRules
+	probe("sub-rules")
 
 	rules, err := parseRules(rawCfg.Rule, proxies, ruleProviders, subRules, "rules")
 	if err != nil {
 		return nil, err
 	}
 	config.Rules = rules
+	probe("rules")
 
 	hosts, err := parseHosts(rawCfg)
 	if err != nil {
 		return nil, err
 	}
 	config.Hosts = hosts
+	probe("hosts")
 
 	parseIPV6(rawCfg) // must before DNS and Tun
 
@@ -715,11 +769,13 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 		return nil, err
 	}
 	config.DNS = dnsCfg
+	probe("dns")
 
 	err = parseTun(rawCfg.Tun, dnsCfg, config.General)
 	if err != nil {
 		return nil, err
 	}
+	probe("tun")
 
 	err = parseTuicServer(rawCfg.TuicServer, config.General)
 	if err != nil {
@@ -742,6 +798,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	probe("sniffer")
 
 	elapsedTime := time.Since(startTime) / time.Millisecond                     // duration in ms
 	log.Infoln("Initial configuration complete, total time: %dms", elapsedTime) //Segment finished in xxm

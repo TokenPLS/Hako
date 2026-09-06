@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 type Rematch struct {

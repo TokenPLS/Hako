@@ -3,7 +3,7 @@ package socks
 import (
 	"net"
 
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/TokenPLS/Hako/transport/socks5"
 )
 
 type packet struct {

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/tproxy"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/listener/tproxy"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type TProxyOption struct {

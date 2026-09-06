@@ -6,9 +6,9 @@ import (
 	"io"
 	"net"
 
-	"github.com/metacubex/mihomo/common/buf"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/transport/vless/vision"
+	"github.com/TokenPLS/Hako/common/buf"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/transport/vless/vision"
 
 	"github.com/gofrs/uuid/v5"
 	"google.golang.org/protobuf/proto"

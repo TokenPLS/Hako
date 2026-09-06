@@ -1,7 +1,7 @@
 package faketcp
 
 import (
-	"github.com/metacubex/mihomo/transport/hysteria/obfs"
+	"github.com/TokenPLS/Hako/transport/hysteria/obfs"
 	"net"
 	"sync"
 	"syscall"

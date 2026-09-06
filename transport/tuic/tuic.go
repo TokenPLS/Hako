@@ -1,10 +1,10 @@
 package tuic
 
 import (
-	"github.com/metacubex/mihomo/transport/tuic/common"
-	"github.com/metacubex/mihomo/transport/tuic/types"
-	v4 "github.com/metacubex/mihomo/transport/tuic/v4"
-	v5 "github.com/metacubex/mihomo/transport/tuic/v5"
+	"github.com/TokenPLS/Hako/transport/tuic/common"
+	"github.com/TokenPLS/Hako/transport/tuic/types"
+	v4 "github.com/TokenPLS/Hako/transport/tuic/v4"
+	v5 "github.com/TokenPLS/Hako/transport/tuic/v5"
 )
 
 type ClientOptionV4 = v4.ClientOption

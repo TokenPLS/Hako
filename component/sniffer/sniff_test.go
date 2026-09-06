@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/metacubex/mihomo/common/buf"
-	"github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/common/buf"
+	"github.com/TokenPLS/Hako/constant"
 	"github.com/metacubex/quic-go/quicvarint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

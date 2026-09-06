@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/proxydialer"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
-	mihomoNtp "github.com/metacubex/mihomo/ntp"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/component/proxydialer"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
+	mihomoNtp "github.com/TokenPLS/Hako/ntp"
 
 	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/sing/common/ntp"

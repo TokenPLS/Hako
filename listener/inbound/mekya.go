@@ -1,6 +1,6 @@
 package inbound
 
-import LC "github.com/metacubex/mihomo/listener/config"
+import LC "github.com/TokenPLS/Hako/listener/config"
 
 type MekyaConfig struct {
 	Enable                         bool       `inbound:"enable,omitempty"`

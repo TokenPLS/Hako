@@ -13,9 +13,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/metacubex/mihomo/component/ca"
-	tlsC "github.com/metacubex/mihomo/component/tls"
-	"github.com/metacubex/mihomo/ntp"
+	"github.com/TokenPLS/Hako/component/ca"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
+	"github.com/TokenPLS/Hako/ntp"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/randv2"

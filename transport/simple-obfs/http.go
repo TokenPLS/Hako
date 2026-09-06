@@ -8,7 +8,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/metacubex/mihomo/common/pool"
+	"github.com/TokenPLS/Hako/common/pool"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/randv2"

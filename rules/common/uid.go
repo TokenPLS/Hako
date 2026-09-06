@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"runtime"
 
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type Uid struct {
@@ -17,7 +17,10 @@ type Uid struct {
 }
 
 func NewUid(oUid, adapter string) (*Uid, error) {
-	if !(runtime.GOOS == "linux" || runtime.GOOS == "android") {
+	// macOS Transparent Proxy supplies the source UID from Apple's
+	// audit token, so Darwin can evaluate this metadata rule without a Linux
+	// process lookup. iOS uses GOOS=ios and remains fail-closed/stripped.
+	if !(runtime.GOOS == "linux" || runtime.GOOS == "android" || runtime.GOOS == "darwin") {
 		return nil, fmt.Errorf("uid rule not support this platform")
 	}
 
@@ -45,7 +48,7 @@ func (u *Uid) Match(metadata *C.Metadata, helper C.RuleMatchHelper) (bool, strin
 	if helper.FindProcess != nil {
 		helper.FindProcess()
 	}
-	if metadata.Uid != 0 {
+	if metadata.HasUID() {
 		if u.uids.Check(metadata.Uid) {
 			return true, u.adapter
 		}

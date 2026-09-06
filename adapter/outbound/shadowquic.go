@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/ca"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/ntp"
-	"github.com/metacubex/mihomo/transport/shadowquic"
-	"github.com/metacubex/mihomo/transport/tuic"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/ca"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/ntp"
+	"github.com/TokenPLS/Hako/transport/shadowquic"
+	"github.com/TokenPLS/Hako/transport/tuic"
 
 	"github.com/metacubex/jls-quic-go"
 	"github.com/metacubex/jls-tls"

@@ -8,9 +8,9 @@ import (
 	"net"
 	"strings"
 
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/ntp"
-	"github.com/metacubex/mihomo/transport/ssr/tools"
+	"github.com/TokenPLS/Hako/common/pool"
+	"github.com/TokenPLS/Hako/ntp"
+	"github.com/TokenPLS/Hako/transport/ssr/tools"
 
 	"github.com/metacubex/randv2"
 )

@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/callback"
-	"github.com/metacubex/mihomo/common/lru"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
+	"github.com/TokenPLS/Hako/common/callback"
+	"github.com/TokenPLS/Hako/common/lru"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
 
 	"golang.org/x/net/publicsuffix"
 )

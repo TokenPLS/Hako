@@ -4,9 +4,9 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/metacubex/mihomo/adapter/outbound"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/listener/inbound"
+	"github.com/TokenPLS/Hako/adapter/outbound"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/listener/inbound"
 
 	"github.com/stretchr/testify/assert"
 )

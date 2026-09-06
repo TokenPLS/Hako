@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/rules/common"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/rules/common"
 )
 
 type Logic struct {
@@ -122,7 +122,6 @@ func (logic *Logic) findSubRuleRange(payload string, ruleRanges []Range) []Range
 	subRuleRange := make([]Range, 0)
 	for _, rr := range ruleRanges {
 		if rr.start == 0 && rr.end == payloadLen-1 {
-			// 最大范围跳过
 			continue
 		}
 

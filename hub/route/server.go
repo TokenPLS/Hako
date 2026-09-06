@@ -10,17 +10,18 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/ech"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/ntp"
-	"github.com/metacubex/mihomo/tunnel/statistic"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/ech"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/ntp"
+	"github.com/TokenPLS/Hako/tunnel/statistic"
 
 	"github.com/metacubex/chi"
 	"github.com/metacubex/chi/cors"
@@ -38,11 +39,37 @@ var (
 	unixServer *http.Server
 	pipeServer *http.Server
 
+	httpListener net.Listener
+	tlsListener  net.Listener
+	unixListener net.Listener
+	pipeListener net.Listener
+	serverMu     sync.Mutex
+
 	embedMode = false
 )
 
 func SetEmbedMode(embed bool) {
 	embedMode = embed
+}
+
+// geoUpdaterAllowed decides whether the two routes that download geo databases inside the
+// process are served. It is separate from embedMode because the reason for closing them is
+// separate: not "an embedded core must not reconfigure itself", but a measured memory ceiling
+// that belongs to ONE platform.
+//
+// An iOS packet tunnel was measured dying at 49.5 MiB, and GeoIP.dat is 17 MB to fetch and
+// unpack. A macOS app extension was measured living steadily at 62.4 MiB with no limit
+// configured, which does not prove the download fits -- it proves the iOS ceiling is not there.
+// The product rule this follows is explicit: implement every upstream capability, and where iOS
+// cannot, implementing it on macOS alone is an acceptable outcome.
+//
+// Default false, so a caller that never speaks keeps today's behaviour on every platform.
+var geoUpdaterAllowed = false
+
+// SetGeoUpdaterAllowed permits the in-process geo updater routes. The binding sets it from the
+// runtime profile.
+func SetGeoUpdaterAllowed(allowed bool) {
+	geoUpdaterAllowed = allowed
 }
 
 type Traffic struct {
@@ -90,11 +117,17 @@ func (c Cors) Apply(r chi.Router) {
 }
 
 func ReCreateServer(cfg *Config) {
-	go start(cfg)
-	go startTLS(cfg)
-	go startUnix(cfg)
+	// Listener replacement is one synchronous control-plane transaction. Each
+	// start helper only launches Serve after publishing its new server, so a
+	// following recreate cannot race an older stop goroutine over the global
+	// pointers or Unix pathname (important for in-process NE restart).
+	serverMu.Lock()
+	defer serverMu.Unlock()
+	start(cfg)
+	startTLS(cfg)
+	startUnix(cfg)
 	if inbound.SupportNamedPipe {
-		go startPipe(cfg)
+		startPipe(cfg)
 	}
 }
 
@@ -105,20 +138,28 @@ func SetUIPath(path string) {
 func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 	r := chi.NewRouter()
 	cors.Apply(r)
-	if isDebug {
-		r.Mount("/debug", func() http.Handler {
-			r := chi.NewRouter()
-			r.Put("/gc", func(w http.ResponseWriter, r *http.Request) {
-				debug.FreeOSMemory()
-			})
-			handler := middleware.Profiler
-			r.Mount("/", handler())
-			return r
-		}())
-	}
 	r.Group(func(r chi.Router) {
 		if secret != "" {
 			r.Use(authentication(secret))
+		}
+		// Inside the authenticated group, not beside it. A pprof heap profile
+		// carries proxy server addresses, subscription URLs and whatever
+		// credential material is resident, and this fork wires isDebug to the
+		// configuration's own log-level (bind/hako/external_controller.go) --
+		// so leaving it outside meant a subscription could write `log-level:
+		// debug` plus an external-controller on 0.0.0.0 and publish a profiler
+		// to the local network, secret or no secret. It stays exactly as
+		// available to whoever holds the secret as it was.
+		if isDebug {
+			r.Mount("/debug", func() http.Handler {
+				r := chi.NewRouter()
+				r.Put("/gc", func(w http.ResponseWriter, r *http.Request) {
+					debug.FreeOSMemory()
+				})
+				handler := middleware.Profiler
+				r.Mount("/", handler())
+				return r
+			}())
 		}
 		r.Get("/", hello)
 		r.Get("/logs", getLogs)
@@ -145,7 +186,14 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 
 	if uiPath != "" {
 		r.Group(func(r chi.Router) {
-			fs := http.StripPrefix("/ui", http.FileServer(http.Dir(uiPath)))
+			uiFS := http.FileSystem(http.Dir(uiPath))
+			if embedMode {
+				// A sandboxed extension answers EPERM to the sendfile upgrade
+				// and Go kills the copy mid-file; see hako_ui_fs.go. Ordinary
+				// mihomo keeps the upstream fast path.
+				uiFS = hakoUserspaceFileSystem{uiFS}
+			}
+			fs := http.StripPrefix("/ui", http.FileServer(uiFS))
 			r.Get("/ui", http.RedirectHandler("/ui/", http.StatusTemporaryRedirect).ServeHTTP)
 			r.Get("/ui/*", func(w http.ResponseWriter, r *http.Request) {
 				fs.ServeHTTP(w, r)
@@ -161,6 +209,10 @@ func router(isDebug bool, secret string, dohServer string, cors Cors) *chi.Mux {
 
 func start(cfg *Config) {
 	// first stop existing server
+	if httpListener != nil {
+		_ = httpListener.Close()
+		httpListener = nil
+	}
 	if httpServer != nil {
 		_ = httpServer.Close()
 		httpServer = nil
@@ -181,14 +233,21 @@ func start(cfg *Config) {
 			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer, cfg.Cors),
 		}
 		httpServer = server
-		if err = server.Serve(l); err != nil {
-			log.Errorln("External controller serve error: %s", err)
-		}
+		httpListener = l
+		go func() {
+			if serveErr := server.Serve(l); serveErr != nil {
+				log.Errorln("External controller serve error: %s", serveErr)
+			}
+		}()
 	}
 }
 
 func startTLS(cfg *Config) {
 	// first stop existing server
+	if tlsListener != nil {
+		_ = tlsListener.Close()
+		tlsListener = nil
+	}
 	if tlsServer != nil {
 		_ = tlsServer.Close()
 		tlsServer = nil
@@ -242,14 +301,22 @@ func startTLS(cfg *Config) {
 			Handler: router(cfg.IsDebug, cfg.Secret, cfg.DohServer, cfg.Cors),
 		}
 		tlsServer = server
-		if err = server.Serve(tls.NewListener(l, tlsConfig)); err != nil {
-			log.Errorln("External controller tls serve error: %s", err)
-		}
+		tlsListener = tls.NewListener(l, tlsConfig)
+		listener := tlsListener
+		go func() {
+			if serveErr := server.Serve(listener); serveErr != nil {
+				log.Errorln("External controller tls serve error: %s", serveErr)
+			}
+		}()
 	}
 }
 
 func startUnix(cfg *Config) {
 	// first stop existing server
+	if unixListener != nil {
+		_ = unixListener.Close()
+		unixListener = nil
+	}
 	if unixServer != nil {
 		_ = unixServer.Close()
 		unixServer = nil
@@ -290,14 +357,21 @@ func startUnix(cfg *Config) {
 			Handler: router(cfg.IsDebug, "", cfg.DohServer, cfg.Cors),
 		}
 		unixServer = server
-		if err = server.Serve(l); err != nil {
-			log.Errorln("External controller unix serve error: %s", err)
-		}
+		unixListener = l
+		go func() {
+			if serveErr := server.Serve(l); serveErr != nil {
+				log.Errorln("External controller unix serve error: %s", serveErr)
+			}
+		}()
 	}
 }
 
 func startPipe(cfg *Config) {
 	// first stop existing server
+	if pipeListener != nil {
+		_ = pipeListener.Close()
+		pipeListener = nil
+	}
 	if pipeServer != nil {
 		_ = pipeServer.Close()
 		pipeServer = nil
@@ -321,9 +395,12 @@ func startPipe(cfg *Config) {
 			Handler: router(cfg.IsDebug, "", cfg.DohServer, cfg.Cors),
 		}
 		pipeServer = server
-		if err = server.Serve(l); err != nil {
-			log.Errorln("External controller pipe serve error: %s", err)
-		}
+		pipeListener = l
+		go func() {
+			if serveErr := server.Serve(l); serveErr != nil {
+				log.Errorln("External controller pipe serve error: %s", serveErr)
+			}
+		}()
 	}
 }
 
@@ -386,12 +463,13 @@ func traffic(w http.ResponseWriter, r *http.Request) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	t := statistic.DefaultManager
+	onlyProxy := r.URL.Query().Get("only-proxy") == "true"
 	buf := &bytes.Buffer{}
 	var err error
 	for range tick.C {
 		buf.Reset()
-		up, down := t.Now()
-		upTotal, downTotal := t.Total()
+		up, down := t.NowTraffic(onlyProxy)
+		upTotal, downTotal := t.TotalTraffic(onlyProxy)
 		if err := json.NewEncoder(buf).Encode(Traffic{
 			Up:        up,
 			Down:      down,

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/auth"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/auth"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/http"
 )

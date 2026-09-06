@@ -6,8 +6,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/metacubex/mihomo/component/ca"
-	tlsC "github.com/metacubex/mihomo/component/tls"
+	"github.com/TokenPLS/Hako/component/ca"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
 
 	"github.com/metacubex/tls"
 )

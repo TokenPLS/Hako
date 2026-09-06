@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/metacubex/mihomo/common/httputils"
-	"github.com/metacubex/mihomo/component/ca"
-	tlsC "github.com/metacubex/mihomo/component/tls"
-	"github.com/metacubex/mihomo/transport/mkcp"
+	"github.com/TokenPLS/Hako/common/httputils"
+	"github.com/TokenPLS/Hako/component/ca"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
+	"github.com/TokenPLS/Hako/transport/mkcp"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/tls"

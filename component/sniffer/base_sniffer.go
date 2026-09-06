@@ -3,9 +3,9 @@ package sniffer
 import (
 	"errors"
 
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/sniffer"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/constant/sniffer"
 )
 
 type SnifferConfig struct {

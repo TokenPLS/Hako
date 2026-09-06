@@ -6,22 +6,23 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/http"
-	"github.com/metacubex/mihomo/listener/mixed"
-	"github.com/metacubex/mihomo/listener/redir"
-	embedSS "github.com/metacubex/mihomo/listener/shadowsocks"
-	"github.com/metacubex/mihomo/listener/sing_shadowsocks"
-	"github.com/metacubex/mihomo/listener/sing_tun"
-	"github.com/metacubex/mihomo/listener/sing_vmess"
-	"github.com/metacubex/mihomo/listener/socks"
-	"github.com/metacubex/mihomo/listener/tproxy"
-	"github.com/metacubex/mihomo/listener/tuic"
-	LT "github.com/metacubex/mihomo/listener/tunnel"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/http"
+	"github.com/TokenPLS/Hako/listener/mixed"
+	"github.com/TokenPLS/Hako/listener/redir"
+	embedSS "github.com/TokenPLS/Hako/listener/shadowsocks"
+	"github.com/TokenPLS/Hako/listener/sing_shadowsocks"
+	"github.com/TokenPLS/Hako/listener/sing_tun"
+	"github.com/TokenPLS/Hako/listener/sing_vmess"
+	"github.com/TokenPLS/Hako/listener/socks"
+	"github.com/TokenPLS/Hako/listener/tproxy"
+	"github.com/TokenPLS/Hako/listener/tuic"
+	LT "github.com/TokenPLS/Hako/listener/tunnel"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/samber/lo"
 )
@@ -96,8 +97,29 @@ func BindAddress() string {
 	return bindAddress
 }
 
+// allowLanObserver mirrors tunnel's mode seam, and allow-lan needs it more: it has THREE
+// writers, not two. The containing app's permission gate decides whether a configuration's
+// allow-lan survives parsing, hub/executor applies the parsed value, and the embedded
+// controller's PATCH /configs sets it directly. A consumer holding a snapshot cannot see two
+// of those three.
+//
+// Nil is the default and what every non-embedded build gets.
+var allowLanObserver atomic.Pointer[func(bool)]
+
+// SetAllowLanObserver installs the seam. Nil removes it.
+func SetAllowLanObserver(observe func(bool)) {
+	if observe == nil {
+		allowLanObserver.Store(nil)
+		return
+	}
+	allowLanObserver.Store(&observe)
+}
+
 func SetAllowLan(al bool) {
 	allowLan = al
+	if observe := allowLanObserver.Load(); observe != nil {
+		(*observe)(al)
+	}
 }
 
 func SetBindAddress(host string) {
@@ -725,5 +747,11 @@ func closeTunListener() {
 }
 
 func Cleanup() {
+	tunMux.Lock()
+	defer tunMux.Unlock()
 	closeTunListener()
+	// ReCreateTun compares against LastTunConf before constructing a listener.
+	// A fresh PacketFlow bridge may receive the same numeric fd after Close;
+	// retaining the previous config would falsely skip listener creation.
+	LastTunConf = LC.Tun{}
 }

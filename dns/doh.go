@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go"

@@ -2,15 +2,17 @@ package route
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/outboundgroup"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/profile/cachefile"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/tunnel"
+	"github.com/TokenPLS/Hako/adapter"
+	"github.com/TokenPLS/Hako/adapter/outboundgroup"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/profile/cachefile"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/tunnel"
 
 	"github.com/metacubex/chi"
 	"github.com/metacubex/chi/render"
@@ -122,23 +124,75 @@ func getProxyDelay(w http.ResponseWriter, r *http.Request) {
 
 	proxy := r.Context().Value(CtxKeyProxy).(C.Proxy)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(timeout))
+	// Derived from the request, not Background, so a caller that hangs up
+	// takes its probe with it. Background kept an abandoned probe dialing and
+	// waiting for the full `timeout` on its own -- one orphaned goroutine and
+	// socket per abandoned probe, a sweep of dead nodes at a time (~68KB each
+	// on device; the pad between a surviving sweep and a jetsam kill). The
+	// sibling group-delay handler has derived from r.Context() upstream all
+	// along; this makes the probe family answer hang-ups the same way.
+	ctx, cancel := context.WithTimeout(r.Context(), time.Millisecond*time.Duration(timeout))
 	defer cancel()
 
-	delay, err := proxy.URLTest(ctx, url, expectedStatus)
+	// `expected` keeps upstream's contract: parsed from the request, nil when
+	// absent. What changes is where "answered, but not with that status" is
+	// read from: the outcome, not an error that would have marked the proxy
+	// dead for every URL (adapter.URLTestOutcome). A proxy that does not
+	// provide outcomes takes upstream's path unchanged.
+	var delay uint16
+	satisfied, status := true, 0
+	if outcomes, ok := proxy.(adapter.URLTestOutcomeProvider); ok {
+		var outcome adapter.URLTestOutcome
+		outcome, err = outcomes.URLTestOutcome(ctx, url, expectedStatus)
+		delay, satisfied, status = outcome.Delay, outcome.Satisfied, outcome.HTTPStatus
+	} else {
+		delay, err = proxy.URLTest(ctx, url, expectedStatus)
+	}
 	if ctx.Err() != nil {
 		render.Status(r, http.StatusGatewayTimeout)
 		render.JSON(w, r, ErrRequestTimeout)
 		return
 	}
 
-	if err != nil || delay == 0 {
+	if err != nil || delay == 0 || !satisfied {
 		render.Status(r, http.StatusServiceUnavailable)
-		if err != nil && delay != 0 {
-			render.JSON(w, r, err)
-		} else {
-			render.JSON(w, r, newError("An error occurred in the delay test"))
+		// Hako's App Group-only controller needs the actual dial failure to
+		// distinguish timeout/DNS/TLS/authentication from an API outage. The
+		// previous delay != 0 guard discarded every normal failure, because
+		// failed URL tests necessarily return a zero delay.
+		//
+		// It also needs it as DATA. `message` alone made the client match a
+		// dozen substrings against this tree's English, so rewording a
+		// sentence here silently moved a category there with nothing to go
+		// red -- and every cause that a substring cannot tell apart arrived on
+		// screen as one word. A user
+		// loopback resolver; "dns" could not have said that, and the
+		// errno can.
+		//
+		// `message` keeps upstream's shape and its exact sentence for
+		// every existing reader; the classification travels beside it.
+		sentence := "An error occurred in the delay test"
+		switch {
+		case err != nil:
+			sentence = err.Error()
+		case !satisfied:
+			sentence = fmt.Sprintf("unexpected HTTP status %d from URL test target", status)
 		}
+		answer := render.M{"message": sentence, "httpStatus": status}
+		// A deferred probe is not a failure: the memory admission gate skipped
+		// it and the node keeps whatever it knew before. It is a sentinel
+		// (adapter.ErrURLTestDeferred), so this reads its type rather than the
+		// fixed sentence the client used to recognise.
+		if errors.Is(err, adapter.ErrURLTestDeferred) {
+			answer["deferred"] = true
+		} else if failure := adapter.ClassifyURLTestFailure(err, satisfied, status); failure != nil {
+			answer["failure"] = render.M{
+				"kind":    failure.Kind,
+				"errno":   failure.Errno,
+				"message": failure.Message,
+			}
+		}
+		render.JSON(w, r, answer)
 		return
 	}
 

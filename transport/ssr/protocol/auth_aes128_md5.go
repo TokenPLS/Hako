@@ -1,6 +1,6 @@
 package protocol
 
-import "github.com/metacubex/mihomo/transport/ssr/tools"
+import "github.com/TokenPLS/Hako/transport/ssr/tools"
 
 func init() {
 	register("auth_aes128_md5", newAuthAES128MD5, 9)

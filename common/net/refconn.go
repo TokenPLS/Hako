@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/metacubex/mihomo/common/buf"
+	"github.com/TokenPLS/Hako/common/buf"
 )
 
 type refConn struct {

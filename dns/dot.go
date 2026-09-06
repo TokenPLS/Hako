@@ -3,15 +3,15 @@ package dns
 import (
 	"context"
 	"fmt"
-	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/TokenPLS/Hako/component/resolver"
 	"net"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/deque"
-	"github.com/metacubex/mihomo/component/ca"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/common/deque"
+	"github.com/TokenPLS/Hako/component/ca"
+	C "github.com/TokenPLS/Hako/constant"
 
 	"github.com/metacubex/tls"
 	D "github.com/miekg/dns"

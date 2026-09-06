@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/mixed"
-	"github.com/metacubex/mihomo/listener/socks"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/mixed"
+	"github.com/TokenPLS/Hako/listener/socks"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type MixedOption struct {

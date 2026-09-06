@@ -3,9 +3,9 @@ package listener
 import (
 	"fmt"
 
-	"github.com/metacubex/mihomo/common/structure"
-	C "github.com/metacubex/mihomo/constant"
-	IN "github.com/metacubex/mihomo/listener/inbound"
+	"github.com/TokenPLS/Hako/common/structure"
+	C "github.com/TokenPLS/Hako/constant"
+	IN "github.com/TokenPLS/Hako/listener/inbound"
 )
 
 func ParseListener(mapping map[string]any) (C.InboundListener, error) {

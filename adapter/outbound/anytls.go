@@ -6,13 +6,14 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/proxydialer"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/anytls"
-	"github.com/metacubex/mihomo/transport/vmess"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/proxydialer"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/anytls"
+	"github.com/TokenPLS/Hako/transport/vmess"
 
 	M "github.com/metacubex/sing/common/metadata"
 	"github.com/metacubex/sing/common/uot"
@@ -20,8 +21,15 @@ import (
 
 type AnyTLS struct {
 	*Base
-	client *anytls.Client
-	option *AnyTLSOption
+	// The session client is built on the first dial, not at load. An idle
+	// node used to pay its whole client here -- including the idle-cleanup
+	// goroutine session.NewClient starts -- multiplied by every node of a
+	// subscription while exactly one is active. Validation stays in
+	// NewAnyTLS; only the construction waits.
+	client      *anytls.Client
+	clientOnce  sync.Once
+	buildClient func() *anytls.Client
+	option      *AnyTLSOption
 }
 
 type AnyTLSOption struct {
@@ -51,7 +59,7 @@ type AnyTLSOption struct {
 }
 
 func (t *AnyTLS) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
-	c, err := t.client.CreateProxy(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
+	c, err := t.lazyClient().CreateProxy(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +72,7 @@ func (t *AnyTLS) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	}
 
 	// create tcp
-	c, err := t.client.CreateProxy(ctx, uot.RequestDestination(2))
+	c, err := t.lazyClient().CreateProxy(ctx, uot.RequestDestination(2))
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +96,11 @@ func (t *AnyTLS) ProxyInfo() C.ProxyInfo {
 
 // Close implements C.ProxyAdapter
 func (t *AnyTLS) Close() error {
-	return t.client.Close()
+	// Only a client that was actually built holds sessions or a goroutine.
+	if t.clientBuilt() {
+		return t.client.Close()
+	}
+	return nil
 }
 
 func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
@@ -169,8 +181,24 @@ func NewAnyTLS(option AnyTLSOption) (*AnyTLS, error) {
 	}
 	tOption.TLSConfig = tlsConfig
 
-	client := anytls.NewClient(context.TODO(), tOption)
-	outbound.client = client
+	outbound.buildClient = func() *anytls.Client {
+		return anytls.NewClient(context.TODO(), tOption)
+	}
 
 	return outbound, nil
+}
+
+func (t *AnyTLS) lazyClient() *anytls.Client {
+	t.clientOnce.Do(func() {
+		t.client = t.buildClient()
+	})
+	return t.client
+}
+
+func (t *AnyTLS) clientBuilt() bool {
+	built := true
+	// Once.Do runs at most one function ever; if ours runs, the client was
+	// never built before this Close and there is nothing to close.
+	t.clientOnce.Do(func() { built = false })
+	return built
 }

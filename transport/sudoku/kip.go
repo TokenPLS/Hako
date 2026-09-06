@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
+	sudokuobfs "github.com/TokenPLS/Hako/transport/sudoku/obfs/sudoku"
 )
 
 const (

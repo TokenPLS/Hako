@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/ntp"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/ntp"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/randv2"

@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/transport/hysteria/obfs"
-	"github.com/metacubex/mihomo/transport/hysteria/pmtud_fix"
-	"github.com/metacubex/mihomo/transport/hysteria/transport"
-	"github.com/metacubex/mihomo/transport/hysteria/utils"
+	"github.com/TokenPLS/Hako/transport/hysteria/obfs"
+	"github.com/TokenPLS/Hako/transport/hysteria/pmtud_fix"
+	"github.com/TokenPLS/Hako/transport/hysteria/transport"
+	"github.com/TokenPLS/Hako/transport/hysteria/utils"
 
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/quic-go/congestion"
@@ -230,7 +230,7 @@ func (c *Client) DialUDP(dialer utils.PacketDialer) (UDPConn, error) {
 	}
 	// Send request
 	err = WriteClientRequest(stream, ClientRequest{
-		UDP: false,
+		UDP: true,
 	})
 	if err != nil {
 		_ = stream.Close()

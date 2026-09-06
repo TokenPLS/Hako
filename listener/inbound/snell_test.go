@@ -5,11 +5,11 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/metacubex/mihomo/adapter/outbound"
-	"github.com/metacubex/mihomo/listener/inbound"
-	"github.com/metacubex/mihomo/transport/jls"
-	"github.com/metacubex/mihomo/transport/restls"
-	"github.com/metacubex/mihomo/transport/shadowtls"
+	"github.com/TokenPLS/Hako/adapter/outbound"
+	"github.com/TokenPLS/Hako/listener/inbound"
+	"github.com/TokenPLS/Hako/transport/jls"
+	"github.com/TokenPLS/Hako/transport/restls"
+	"github.com/TokenPLS/Hako/transport/shadowtls"
 
 	"github.com/stretchr/testify/assert"
 )

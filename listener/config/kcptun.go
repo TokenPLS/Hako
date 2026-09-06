@@ -1,6 +1,6 @@
 package config
 
-import "github.com/metacubex/mihomo/transport/kcptun"
+import "github.com/TokenPLS/Hako/transport/kcptun"
 
 type KcpTun struct {
 	Enable        bool `json:"enable"`

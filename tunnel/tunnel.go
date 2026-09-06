@@ -12,22 +12,24 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/loopback"
-	"github.com/metacubex/mihomo/component/nat"
-	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/component/proxydialer"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/slowdown"
-	"github.com/metacubex/mihomo/component/sniffer"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/features"
-	P "github.com/metacubex/mihomo/constant/provider"
-	icontext "github.com/metacubex/mihomo/context"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/tunnel/statistic"
+	syncatomic "sync/atomic"
+
+	"github.com/TokenPLS/Hako/common/atomic"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/loopback"
+	"github.com/TokenPLS/Hako/component/nat"
+	"github.com/TokenPLS/Hako/component/process"
+	"github.com/TokenPLS/Hako/component/proxydialer"
+	"github.com/TokenPLS/Hako/component/resolver"
+	"github.com/TokenPLS/Hako/component/slowdown"
+	"github.com/TokenPLS/Hako/component/sniffer"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/constant/features"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	icontext "github.com/TokenPLS/Hako/context"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/tunnel/statistic"
 
 	"golang.org/x/exp/slices"
 )
@@ -252,9 +254,33 @@ func Mode() TunnelMode {
 	return mode
 }
 
+// modeObserver is told about every mode change, by whoever makes it.
+//
+// The seam exists because mode acquired a second writer: the embedded controller's
+// PATCH /configs reaches SetMode just as the containing app's own route does, and a consumer
+// holding a snapshot has no way to learn about the one it did not make. Installing a hook at
+// the two call sites instead would put the burden on each new path to remember, and the path
+// that would be forgotten is the controller's -- it is the one no default test drives.
+//
+// Nil is the default and what every non-embedded build gets, so upstream pays one nil check
+// per mode change.
+var modeObserver syncatomic.Pointer[func(TunnelMode)]
+
+// SetModeObserver installs the seam. Nil removes it.
+func SetModeObserver(observe func(TunnelMode)) {
+	if observe == nil {
+		modeObserver.Store(nil)
+		return
+	}
+	modeObserver.Store(&observe)
+}
+
 // SetMode change the mode of tunnel
 func SetMode(m TunnelMode) {
 	mode = m
+	if observe := modeObserver.Load(); observe != nil {
+		(*observe)(m)
+	}
 }
 
 func FindProcessMode() process.FindProcessMode {
@@ -314,6 +340,31 @@ func preHandleMetadata(metadata *C.Metadata) error {
 	return nil
 }
 
+// ownerLookupUsesPackageName reports whether this build has to ask its host for a package name
+// instead of reading the socket table itself. Only an Android host can answer that: Android
+// stopped letting an app read /proc/net for other apps, so ClashMetaForAndroid supplies the
+// identity through process.DefaultPackageNameResolver instead.
+//
+// Upstream keys this off features.CMFA alone, which is right upstream, where the only thing built
+// with -tags cmfa is ClashMetaForAndroid. This fork reuses the tag on every Apple artifact too
+// for reasons that have nothing to do with process
+// attribution: a platform-supplied TUN descriptor, IsSafePath, the loopback detector. Keyed off
+// the tag alone, darwin took the package-name branch, where DefaultPackageNameResolver is nil and
+// every call returns ErrPlatformNotSupport -- component/process/process_darwin.go was compiled
+// into every shipped framework and never called, so PROCESS-* and UID rules on macOS matched
+// nothing at all while the app told the user they were available. See.
+//
+// Taking (cmfa, goos) as arguments instead of reading this build's own values is what lets the
+// untagged test run grade the cmfa case. A predicate that asks features.CMFA what it is can only
+// be graded by a run carrying that tag, and the defect above survived precisely because no gate
+// here does.
+func ownerLookupUsesPackageName(cmfa bool, goos string) bool {
+	return cmfa && goos == "android"
+}
+
+// resolvesOwnerByPackageName is that predicate applied to this build, once.
+var resolvesOwnerByPackageName = ownerLookupUsesPackageName(features.CMFA, runtime.GOOS)
+
 func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err error) {
 	if metadata.SpecialProxy != "" {
 		var exist bool
@@ -325,7 +376,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 	}
 	var (
 		resolved             bool
-		attemptProcessLookup = metadata.Type != C.INNER
+		attemptProcessLookup = metadata.Type != C.INNER && !metadata.SourceIdentityKnown
 	)
 
 	if node, ok := resolver.DefaultHosts.Search(metadata.Host, false); ok {
@@ -351,7 +402,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		FindProcess: func() {
 			if attemptProcessLookup {
 				attemptProcessLookup = false
-				if !features.CMFA {
+				if !resolvesOwnerByPackageName {
 					// normal check for process
 					uid, path, err := process.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 					if err != nil {
@@ -360,6 +411,8 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 						metadata.Process = filepath.Base(path)
 						metadata.ProcessPath = path
 						metadata.Uid = uid
+						metadata.UidKnown = true
+						metadata.SourceIdentityKnown = true
 
 						if pkg, err := process.FindPackageName(metadata); err == nil { // for android (not CMFA) package names
 							metadata.Process = pkg
@@ -504,6 +557,11 @@ func handleTCPConn(connCtx C.ConnContext) {
 		_ = connCtx.Conn().Close()
 		return
 	}
+	if !acquireTCPConnectionSlot() {
+		_ = connCtx.Conn().Close()
+		return
+	}
+	defer releaseTCPConnectionSlot()
 
 	defer func(conn net.Conn) {
 		_ = conn.Close()
@@ -624,7 +682,36 @@ func handleTCPConn(connCtx C.ConnContext) {
 	handleSocket(conn, remoteConn)
 }
 
+// dialOutcomeObserver is told the result of every completed dial: the error when one failed,
+// nil when one succeeded. Both arrive through the two functions below, which is why the seam
+// lives here -- they are already the single place every TCP and UDP path reports through.
+//
+// It exists because of a specific failure this fork keeps meeting: the core does everything
+// right, says so, and the packets still do not leave. A macOS extension missing the
+// network-client entitlement logged 2,900 identical "operation not permitted" dial failures in
+// 65 seconds while the tunnel reported itself connected, the tun fd was live, the startup phases
+// were green and the controller was listening. The core knew every time. Nobody was told.
+//
+// Nil is the default, so a build that installs nothing pays one nil check per dial.
+var dialOutcomeObserver syncatomic.Pointer[func(error)]
+
+// SetDialOutcomeObserver installs the seam. Nil removes it.
+func SetDialOutcomeObserver(observe func(error)) {
+	if observe == nil {
+		dialOutcomeObserver.Store(nil)
+		return
+	}
+	dialOutcomeObserver.Store(&observe)
+}
+
+func observeDialOutcome(err error) {
+	if observe := dialOutcomeObserver.Load(); observe != nil {
+		(*observe)(err)
+	}
+}
+
 func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err error) {
+	observeDialOutcome(err)
 	if rule == nil {
 		log.Warnln("[%s] dial %s %s --> %s error: %s", strings.ToUpper(metadata.NetWork.String()), proxy.Name(), metadata.SourceDetail(), metadata.RemoteAddress(), err.Error())
 	} else {
@@ -633,6 +720,7 @@ func logMetadataErr(metadata *C.Metadata, rule C.Rule, proxy C.ProxyAdapter, err
 }
 
 func logMetadata(metadata *C.Metadata, rule C.Rule, remoteConn C.Connection) {
+	observeDialOutcome(nil)
 	switch {
 	case metadata.SpecialProxy != "":
 		log.Infoln("[%s] %s --> %s using %s", strings.ToUpper(metadata.NetWork.String()), metadata.SourceDetail(), metadata.RemoteAddress(), remoteConn.Chains().String())

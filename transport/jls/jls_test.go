@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/ca"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/ca"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/http/httptest"

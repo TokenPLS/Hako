@@ -4,11 +4,11 @@ import (
 	"context"
 	"net"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/component/keepalive"
-	"github.com/metacubex/mihomo/component/mptcp"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/component/keepalive"
+	"github.com/TokenPLS/Hako/component/mptcp"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/socks5"
 )
 
 type Listener struct {

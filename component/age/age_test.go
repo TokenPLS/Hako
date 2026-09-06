@@ -3,7 +3,7 @@ package age_test
 import (
 	"testing"
 
-	"github.com/metacubex/mihomo/component/age"
+	"github.com/TokenPLS/Hako/component/age"
 )
 
 func TestAge(t *testing.T) {

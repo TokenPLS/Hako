@@ -7,9 +7,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/common/buf"
-	"github.com/metacubex/mihomo/common/httputils"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/TokenPLS/Hako/common/buf"
+	"github.com/TokenPLS/Hako/common/httputils"
+	N "github.com/TokenPLS/Hako/common/net"
 
 	"github.com/metacubex/http"
 )

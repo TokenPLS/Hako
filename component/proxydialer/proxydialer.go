@@ -7,9 +7,9 @@ import (
 	"net/netip"
 	"strings"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/tunnel/statistic"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/tunnel/statistic"
 )
 
 type proxyDialer struct {

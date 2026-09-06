@@ -3,8 +3,8 @@ package sing_tun
 import (
 	"time"
 
-	"github.com/metacubex/mihomo/constant/features"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/constant/features"
+	"github.com/TokenPLS/Hako/log"
 
 	tun "github.com/metacubex/sing-tun"
 )

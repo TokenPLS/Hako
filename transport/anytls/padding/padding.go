@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/metacubex/mihomo/transport/anytls/util"
+	"github.com/TokenPLS/Hako/transport/anytls/util"
 )
 
 const CheckMark = -1

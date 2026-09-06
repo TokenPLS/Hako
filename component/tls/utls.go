@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/metacubex/mihomo/common/once"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/once"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/tls"
 	utls "github.com/metacubex/utls"

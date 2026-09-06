@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/httputils"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/common/httputils"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 const (

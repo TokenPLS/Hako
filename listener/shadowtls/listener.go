@@ -5,12 +5,12 @@ import (
 	"net"
 	"runtime/debug"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/inner"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/shadowtls"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/inner"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/transport/shadowtls"
 )
 
 type Builder struct {

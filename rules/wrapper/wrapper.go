@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 type RuleWrapper struct {

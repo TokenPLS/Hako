@@ -8,12 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/outbound"
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/adapter"
+	"github.com/TokenPLS/Hako/adapter/outbound"
+	"github.com/TokenPLS/Hako/common/atomic"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/dlclark/regexp2"
 	"golang.org/x/exp/slices"
@@ -243,8 +244,21 @@ func (gb *GroupBase) URLTest(ctx context.Context, url string, expectedStatus uti
 		proxy := proxy
 		wg.Add(1)
 		go func() {
-			delay, err := proxy.URLTest(ctx, url, expectedStatus)
-			if err == nil {
+			// An answer outside `expected` is an outcome, not an error
+			// (adapter.URLTestOutcome): it is read here so the group endpoint
+			// agrees with the single-proxy one and with the per-URL liveness
+			// it just recorded, instead of reporting the member as a success.
+			var delay uint16
+			var err error
+			satisfied := true
+			if outcomes, ok := proxy.(adapter.URLTestOutcomeProvider); ok {
+				var outcome adapter.URLTestOutcome
+				outcome, err = outcomes.URLTestOutcome(ctx, url, expectedStatus)
+				delay, satisfied = outcome.Delay, outcome.Satisfied
+			} else {
+				delay, err = proxy.URLTest(ctx, url, expectedStatus)
+			}
+			if err == nil && satisfied {
 				lock.Lock()
 				mp[proxy.Name()] = delay
 				lock.Unlock()

@@ -1,4 +1,4 @@
-module github.com/metacubex/mihomo
+module github.com/TokenPLS/Hako
 
 go 1.20
 
@@ -149,3 +149,13 @@ require (
 
 // for https://github.com/golang/protobuf/issues/1704
 replace google.golang.org/protobuf => github.com/metacubex/protobuf-go v0.0.0-20260306035419-7ceee0674686
+
+// v0.4.21 wraps Attach(nil), leaking Darwin fd dispatchers on NE restart.
+replace github.com/metacubex/sing-tun => ./third_party/sing-tun
+
+// v0.1.8's debug arguments race across the full-duplex ReTLS connection.
+replace github.com/metacubex/restls-client-go => ./third_party/restls-client-go
+
+// The pinned meta revision can return from Write while its shaper still owns
+// the caller's payload, racing buffer reuse during connection teardown.
+replace github.com/metacubex/smux => ./third_party/smux

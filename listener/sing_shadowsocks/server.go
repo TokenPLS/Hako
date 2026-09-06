@@ -5,20 +5,21 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/common/sockopt"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/jls"
-	"github.com/metacubex/mihomo/listener/restls"
-	embedSS "github.com/metacubex/mihomo/listener/shadowsocks"
-	"github.com/metacubex/mihomo/listener/shadowtls"
-	"github.com/metacubex/mihomo/listener/sing"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/ntp"
-	"github.com/metacubex/mihomo/transport/kcptun"
-	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/common/sockopt"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/jls"
+	"github.com/TokenPLS/Hako/listener/restls"
+	embedSS "github.com/TokenPLS/Hako/listener/shadowsocks"
+	"github.com/TokenPLS/Hako/listener/shadowtls"
+	"github.com/TokenPLS/Hako/listener/sing"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/ntp"
+	"github.com/TokenPLS/Hako/transport/kcptun"
+	obfs "github.com/TokenPLS/Hako/transport/simple-obfs"
 
 	shadowsocks "github.com/metacubex/sing-shadowsocks"
 	"github.com/metacubex/sing-shadowsocks/shadowaead"
@@ -32,7 +33,7 @@ import (
 )
 
 type Listener struct {
-	closed       bool
+	closed       atomic.Bool
 	config       LC.ShadowsocksServer
 	listeners    []net.Listener
 	udpListeners []net.PacketConn
@@ -40,7 +41,7 @@ type Listener struct {
 	simpleObfs   func(net.Conn) net.Conn
 }
 
-var _listener *Listener
+var defaultListener atomic.Pointer[Listener]
 
 func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (C.MultiAddrListener, error) {
 	var sl *Listener
@@ -51,7 +52,7 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 			inbound.WithSpecialRules(""),
 		}
 		defer func() {
-			_listener = sl
+			defaultListener.Store(sl)
 		}()
 	}
 
@@ -186,7 +187,7 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 					}
 					if err != nil {
 						buff.Release()
-						if sl.closed {
+						if sl.closed.Load() {
 							break
 						}
 						continue
@@ -219,7 +220,7 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 			for {
 				c, err := l.Accept()
 				if err != nil {
-					if sl.closed {
+					if sl.closed.Load() {
 						break
 					}
 					continue
@@ -234,7 +235,8 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 }
 
 func (l *Listener) Close() error {
-	l.closed = true
+	l.closed.Store(true)
+	defaultListener.CompareAndSwap(l, nil)
 	var retErr error
 	for _, lis := range l.listeners {
 		err := lis.Close()
@@ -288,8 +290,9 @@ func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 }
 
 func HandleShadowSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) bool {
-	if _listener != nil && _listener.service != nil {
-		go _listener.HandleConn(conn, tunnel, additions...)
+	listener := defaultListener.Load()
+	if listener != nil && listener.service != nil {
+		go listener.HandleConn(conn, tunnel, additions...)
 		return true
 	}
 	return embedSS.HandleShadowSocks(conn, tunnel, additions...)

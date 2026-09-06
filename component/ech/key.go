@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"sync"
 
-	C "github.com/metacubex/mihomo/constant"
+	C "github.com/TokenPLS/Hako/constant"
 
 	"github.com/metacubex/fswatch"
 	"github.com/metacubex/tls"

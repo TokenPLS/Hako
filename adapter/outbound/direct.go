@@ -3,11 +3,12 @@ package outbound
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/loopback"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/component/loopback"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 type Direct struct {
@@ -42,9 +43,18 @@ func (d *Direct) ListenPacketContext(ctx context.Context, metadata *C.Metadata) 
 	if err := d.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	pc, err := dialer.NewDialer(d.DialOptions()...).ListenPacket(ctx, "udp", "", metadata.AddrPort())
+	physicalDestination, err := dialer.TransformPhysicalAddress("udp", metadata.DstIP)
 	if err != nil {
 		return nil, err
+	}
+	logicalRemote := metadata.AddrPort()
+	physicalRemote := netip.AddrPortFrom(physicalDestination, metadata.DstPort)
+	pc, err := dialer.NewDialer(d.DialOptions()...).ListenPacket(ctx, "udp", "", physicalRemote)
+	if err != nil {
+		return nil, err
+	}
+	if physicalRemote != logicalRemote {
+		pc = newPhysicalAddressPacketConn(pc, logicalRemote, physicalRemote)
 	}
 	return d.loopBack.NewPacketConn(NewPacketConn(pc, d)), nil
 }

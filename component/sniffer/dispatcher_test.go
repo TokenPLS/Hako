@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/constant/sniffer"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/constant/sniffer"
 
 	"github.com/stretchr/testify/assert"
 )

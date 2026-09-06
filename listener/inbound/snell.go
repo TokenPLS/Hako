@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/snell"
-	"github.com/metacubex/mihomo/log"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/snell"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type SnellOption struct {

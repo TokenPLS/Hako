@@ -12,8 +12,8 @@ VERSION=$(shell git rev-parse --short HEAD)
 endif
 
 BUILDTIME=$(shell date -u)
-GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/metacubex/mihomo/constant.Version=$(VERSION)" \
-		-X "github.com/metacubex/mihomo/constant.BuildTime=$(BUILDTIME)" \
+GOBUILD=CGO_ENABLED=0 go build -tags with_gvisor -trimpath -ldflags '-X "github.com/TokenPLS/Hako/constant.Version=$(VERSION)" \
+		-X "github.com/TokenPLS/Hako/constant.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
 PLATFORM_LIST = \
@@ -204,3 +204,14 @@ clean:
 CLANG ?= clang-14
 CFLAGS := -O2 -g -Wall -Werror $(CFLAGS)
 
+
+# ---- Hako Apple SDK ----
+# Builds Hako.xcframework (ios + iossimulator + macos) from bind/hako.
+lib_apple:
+	go run ./cmd/build_libbox -target apple
+
+# Comparison/fallback artifact proving that HTTP/1.1+2 stays buildable without
+# QUIC. It does not overwrite the production Hako.xcframework.
+lib_apple_no_quic:
+	mkdir -p /tmp/hako-no-quic
+	go run ./cmd/build_libbox -target apple -without-quic -output /tmp/hako-no-quic/Hako.xcframework

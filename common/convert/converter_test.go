@@ -3,8 +3,8 @@ package convert_test
 import (
 	"testing"
 
-	"github.com/metacubex/mihomo/adapter"
-	. "github.com/metacubex/mihomo/common/convert"
+	"github.com/TokenPLS/Hako/adapter"
+	. "github.com/TokenPLS/Hako/common/convert"
 
 	"github.com/stretchr/testify/assert"
 )

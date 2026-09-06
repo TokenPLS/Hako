@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
 )
 
 type SelectorOption struct {

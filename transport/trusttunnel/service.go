@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/httputils"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/TokenPLS/Hako/common/httputils"
+	N "github.com/TokenPLS/Hako/common/net"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go/http3"

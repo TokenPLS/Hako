@@ -5,9 +5,9 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/metacubex/mihomo/adapter/outbound"
-	"github.com/metacubex/mihomo/listener/inbound"
-	"github.com/metacubex/mihomo/transport/vless/encryption"
+	"github.com/TokenPLS/Hako/adapter/outbound"
+	"github.com/TokenPLS/Hako/listener/inbound"
+	"github.com/TokenPLS/Hako/transport/vless/encryption"
 	"github.com/stretchr/testify/assert"
 )
 

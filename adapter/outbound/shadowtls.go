@@ -1,6 +1,6 @@
 package outbound
 
-import "github.com/metacubex/mihomo/transport/shadowtls"
+import "github.com/TokenPLS/Hako/transport/shadowtls"
 
 type ShadowTLSOptions struct {
 	Password string `proxy:"password,omitempty"`

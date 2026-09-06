@@ -3,19 +3,20 @@ package shadowsocks
 import (
 	"context"
 	"net"
+	"sync/atomic"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/sockopt"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/shadowsocks/core"
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/sockopt"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/core"
+	"github.com/TokenPLS/Hako/transport/socks5"
 )
 
 type UDPListener struct {
 	packetConn net.PacketConn
-	closed     bool
+	closed     atomic.Bool
 }
 
 func NewUDP(addr string, lc C.InboundListenConfig, pickCipher core.Cipher, tunnel C.Tunnel, additions ...inbound.Addition) (*UDPListener, error) {
@@ -28,7 +29,7 @@ func NewUDP(addr string, lc C.InboundListenConfig, pickCipher core.Cipher, tunne
 		log.Warnln("Failed to Reuse UDP Address: %s", err)
 	}
 
-	sl := &UDPListener{l, false}
+	sl := &UDPListener{packetConn: l}
 	conn := pickCipher.PacketConn(N.NewEnhancePacketConn(l))
 	go func() {
 		for {
@@ -37,7 +38,7 @@ func NewUDP(addr string, lc C.InboundListenConfig, pickCipher core.Cipher, tunne
 				if put != nil {
 					put()
 				}
-				if sl.closed {
+				if sl.closed.Load() {
 					break
 				}
 				continue
@@ -50,7 +51,7 @@ func NewUDP(addr string, lc C.InboundListenConfig, pickCipher core.Cipher, tunne
 }
 
 func (l *UDPListener) Close() error {
-	l.closed = true
+	l.closed.Store(true)
 	return l.packetConn.Close()
 }
 

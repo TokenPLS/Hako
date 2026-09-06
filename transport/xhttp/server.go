@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/httputils"
-	N "github.com/metacubex/mihomo/common/net"
+	"github.com/TokenPLS/Hako/common/httputils"
+	N "github.com/TokenPLS/Hako/common/net"
 
 	"github.com/metacubex/http"
 )
@@ -55,7 +55,11 @@ func (c *httpServerConn) Write(b []byte) (int, error) {
 		return 0, io.ErrClosedPipe
 	}
 
-	n, err := c.w.Write(b)
+	// The metacubex HTTP/2 writer can retain the payload until its asynchronous
+	// frame write completes. io.Writer callers (notably smux) are allowed to
+	// reuse their buffer as soon as Write returns, so transfer an owned snapshot
+	// at this boundary.
+	n, err := c.w.Write(bytes.Clone(b))
 	if err == nil && c.flusher != nil {
 		c.flusher.Flush()
 	}

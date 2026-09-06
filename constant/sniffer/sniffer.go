@@ -1,6 +1,6 @@
 package sniffer
 
-import "github.com/metacubex/mihomo/constant"
+import "github.com/TokenPLS/Hako/constant"
 
 type Sniffer interface {
 	SupportNetwork() constant.NetWork

@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/buf"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/ech"
-	tlsC "github.com/metacubex/mihomo/component/tls"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/buf"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/ech"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"

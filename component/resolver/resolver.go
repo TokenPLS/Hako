@@ -7,8 +7,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/trie"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/trie"
 
 	"github.com/metacubex/randv2"
 	"github.com/miekg/dns"
@@ -230,18 +230,84 @@ func ResolveECH(ctx context.Context, host string) ([]byte, error) {
 	return ResolveECHWithResolver(ctx, host, DefaultResolver)
 }
 
-func ClearCache() {
-	if DefaultResolver != nil {
-		go DefaultResolver.ClearCache()
+// ClearCache and ResetConnection must reach EVERY configured resolver, not just the two
+// obvious ones. ProxyServerHostResolver and DirectHostResolver exist whenever
+// proxy-server-nameserver or direct-nameserver is configured, and skipping them left their
+// caches and upstream sockets scoped to the previous network path after a change. The
+// omission is invisible from the resolution path, which only ever calls LookupIP.
+// ResolverAggregate is implemented by a Resolver whose ClearCache and ResetConnection fan
+// out to other Resolvers it holds -- dns.Resolvers, which walks its main, proxy and direct
+// members. updateDNS registers that aggregate as DefaultResolver AND registers the
+// aggregate's own ProxyResolver / DirectResolver as ProxyServerHostResolver and
+// DirectHostResolver, so the same member is reachable twice through different values.
+// Identity cannot see that; the aggregate has to say what it contains, and the lifecycle
+// helpers ask before visiting a candidate on its own.
+type ResolverAggregate interface {
+	ContainsResolver(Resolver) bool
+}
+
+func eachConfiguredResolver(do func(Resolver)) {
+	// Deduplicated twice over, because the four are not four distinct objects. By identity,
+	// for the case where two variables hold the very same value; and by containment, for
+	// the case updateDNS actually builds -- DefaultResolver holds the whole dns.Resolvers
+	// aggregate while ProxyServerHostResolver and DirectHostResolver hold that aggregate's
+	// own members, whose ClearCache and ResetConnection the aggregate already fans out to.
+	// Identity alone let each member be visited a second time, in its own goroutine; that
+	// was "idempotent so merely wasteful" until v1.19.30 started sharing one raw DNS
+	// transport across those members, where a second reset landing after a query has
+	// rebuilt the transport closes the new one.
+	//
+	// SystemResolver is initialised by the dns module and needs no nil check; the rest are
+	// nil until the corresponding option is configured.
+	candidates := []Resolver{DefaultResolver, ProxyServerHostResolver, DirectHostResolver, SystemResolver}
+	seen := make(map[Resolver]struct{}, len(candidates))
+	for i, r := range candidates {
+		if r == nil {
+			continue
+		}
+		if _, duplicate := seen[r]; duplicate {
+			continue
+		}
+		covered := false
+		for j, other := range candidates {
+			if j == i || other == nil {
+				continue
+			}
+			if aggregate, ok := other.(ResolverAggregate); ok && aggregate.ContainsResolver(r) {
+				covered = true
+				break
+			}
+		}
+		if covered {
+			continue
+		}
+		seen[r] = struct{}{}
+		do(r)
 	}
-	go SystemResolver.ClearCache() // SystemResolver unneeded check nil
+}
+
+func ClearCache() {
+	eachConfiguredResolver(func(r Resolver) { go r.ClearCache() })
 }
 
 func ResetConnection() {
-	if DefaultResolver != nil {
-		go DefaultResolver.ResetConnection()
-	}
-	go SystemResolver.ResetConnection() // SystemResolver unneeded check nil
+	eachConfiguredResolver(func(r Resolver) { go r.ResetConnection() })
+}
+
+// CloseQueries ends in-flight queries. It is the SHUTDOWN signal and must not be called on a
+// path change: ResetConnection is what a path change wants, and conflating the two is what made
+// every default-interface change hand the caller a SERVFAIL (see dns.Resolver's queryMu).
+//
+// Not added to the Resolver interface: the optional assertion keeps implementations that have no
+// query lifetime of their own -- and any future one -- from having to carry a no-op. Unlike its
+// neighbours this runs SYNCHRONOUSLY, because a shutdown that returns before the cancellations
+// land is the leak it exists to close.
+func CloseQueries() {
+	eachConfiguredResolver(func(r Resolver) {
+		if closer, ok := r.(interface{ CloseQueries() }); ok {
+			closer.CloseQueries()
+		}
+	})
 }
 
 func SortationAddr(ips []netip.Addr) (ipv4s, ipv6s []netip.Addr) {

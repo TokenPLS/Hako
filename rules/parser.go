@@ -3,10 +3,10 @@ package rules
 import (
 	"fmt"
 
-	C "github.com/metacubex/mihomo/constant"
-	RC "github.com/metacubex/mihomo/rules/common"
-	"github.com/metacubex/mihomo/rules/logic"
-	RP "github.com/metacubex/mihomo/rules/provider"
+	C "github.com/TokenPLS/Hako/constant"
+	RC "github.com/TokenPLS/Hako/rules/common"
+	"github.com/TokenPLS/Hako/rules/logic"
+	RP "github.com/TokenPLS/Hako/rules/provider"
 )
 
 func ParseRule(tp, payload, target string, params []string, subRules map[string][]C.Rule) (parsed C.Rule, parseErr error) {
@@ -71,6 +71,10 @@ func ParseRule(tp, payload, target string, params []string, subRules map[string]
 		parsed, parseErr = RC.NewNetworkType(payload, target)
 	case "UID":
 		parsed, parseErr = RC.NewUid(payload, target)
+	case "SOURCE-APP-SIGNING-ID":
+		parsed, parseErr = RC.NewSourceAppIdentity(payload, target, C.SourceAppSigningID)
+	case "SOURCE-APP-TEAM-ID":
+		parsed, parseErr = RC.NewSourceAppIdentity(payload, target, C.SourceAppTeamID)
 	case "IN-TYPE":
 		parsed, parseErr = RC.NewInType(payload, target)
 	case "IN-USER":

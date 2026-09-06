@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	mihomoHttp "github.com/metacubex/mihomo/component/http"
+	mihomoHttp "github.com/TokenPLS/Hako/component/http"
 
 	"github.com/metacubex/http"
 )

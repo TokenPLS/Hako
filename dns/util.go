@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/picker"
-	"github.com/metacubex/mihomo/component/ech/echparser"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/picker"
+	"github.com/TokenPLS/Hako/component/ech/echparser"
+	"github.com/TokenPLS/Hako/component/resolver"
+	"github.com/TokenPLS/Hako/log"
 
 	D "github.com/miekg/dns"
 	"github.com/samber/lo"
@@ -47,6 +47,7 @@ func updateTTL(records []D.RR, ttl uint32) {
 
 // getMsgFromCache returns a cached dns message if it exists, otherwise returns nil.
 // the returned msg is a copy of the original msg, so it can be modified without affecting the original msg.
+
 func getMsgFromCache(c dnsCache, q D.Question) (*D.Msg, time.Time, bool) {
 	msg, expireTime, hit := c.GetWithExpire(q.String())
 	if msg != nil {
@@ -71,6 +72,17 @@ func putMsgToCache(c dnsCache, q D.Question, msg *D.Msg) {
 		return rr.Header().Rrtype != D.TypeOPT
 	})
 
+	// Negative answers take the same path as any other answer, which is mihomo's: the
+	// minimum TTL across Answer+Ns+Extra, which for an NXDOMAIN or NODATA is the SOA's
+	// header TTL.
+	//
+	// This core used to bound them by RFC 2308 section 5 instead -- min(SOA header TTL,
+	// SOA MINIMUM) -- and that is measurably the more conformant reading: amazon.com's
+	// NXDOMAIN via 1.1.1.1 carries a 7200 second header TTL where the RFC gives 60. It was
+	// removed anyway. A mihomo configuration has to behave the way mihomo behaves,
+	// and being more correct than upstream is still being different from it; the fix
+	// belongs upstream, where every mihomo user gets it, not in a fork whose whole promise
+	// is that it runs their configuration unchanged.
 	var ttl uint32
 	if msg.Rcode == D.RcodeServerFailure {
 		// [...] a resolver MAY cache a server failure response.

@@ -4,10 +4,10 @@ import (
 	"testing"
 
 	// https://github.com/golang/go/wiki/CodeReviewComments#import-dot
-	. "github.com/metacubex/mihomo/rules/logic"
+	. "github.com/TokenPLS/Hako/rules/logic"
 
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/rules"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/rules"
 
 	"github.com/stretchr/testify/assert"
 )

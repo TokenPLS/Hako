@@ -9,10 +9,10 @@ import (
 	"net/netip"
 	"strconv"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/component/ca"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/socks5"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/component/ca"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/socks5"
 
 	"github.com/metacubex/tls"
 )
@@ -186,6 +186,21 @@ func NewSocks5(option Socks5Option) (*Socks5, error) {
 		})
 		if err != nil {
 			return nil, err
+		}
+		// A SOCKS5 proxy carries each proxied connection over its OWN new TLS
+		// connection, so without session resumption every one of them pays a full
+		// handshake -- and on iOS a full handshake's certificate verification is an XPC
+		// round trip to trustd (measured on real chains: 2.18 ms platform vs 50 us
+		// pure-Go). This config is built once here and reused verbatim by every dial, so
+		// one cache on it serves them all: a resumed handshake does not re-send the
+		// server certificate, which skips the verification while preserving it, because
+		// a MITM without the session key still gets a full and fully verified handshake.
+		//
+		// Same scope as adapter/outbound/http.go on purpose: this TCP proxy only. QUIC
+		// proxies manage their own session tickets, and arming a cache inside the shared
+		// ca.GetTLSConfig breaks TUIC v5 authentication deterministically.
+		if tlsConfig.ClientSessionCache == nil {
+			tlsConfig.ClientSessionCache = tls.NewLRUClientSessionCache(0)
 		}
 	}
 

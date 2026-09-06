@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/contextutils"
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/common/contextutils"
+	"github.com/TokenPLS/Hako/common/pool"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
 
 	"github.com/metacubex/quic-go"
 	"github.com/metacubex/tls"

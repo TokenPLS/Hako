@@ -3,8 +3,8 @@ package shadowquic
 import (
 	"time"
 
-	"github.com/metacubex/mihomo/transport/tuic/congestion"
-	congestionv2 "github.com/metacubex/mihomo/transport/tuic/congestion_v2"
+	"github.com/TokenPLS/Hako/transport/tuic/congestion"
+	congestionv2 "github.com/TokenPLS/Hako/transport/tuic/congestion_v2"
 
 	"github.com/metacubex/jls-quic-go"
 	jcongestion "github.com/metacubex/jls-quic-go/congestion"

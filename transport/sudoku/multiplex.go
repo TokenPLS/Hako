@@ -7,8 +7,8 @@ import (
 	"net"
 	"strings"
 
-	"github.com/metacubex/mihomo/transport/sudoku/multiplex"
-	"github.com/metacubex/mihomo/transport/sudoku/obfs/httpmask"
+	"github.com/TokenPLS/Hako/transport/sudoku/multiplex"
+	"github.com/TokenPLS/Hako/transport/sudoku/obfs/httpmask"
 )
 
 // StartMultiplexClient upgrades an already-handshaked Sudoku tunnel into a multiplex session.

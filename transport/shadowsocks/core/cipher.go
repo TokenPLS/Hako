@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
-	"github.com/metacubex/mihomo/transport/shadowsocks/shadowstream"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/shadowaead"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/shadowstream"
 )
 
 type Cipher interface {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	tlsC "github.com/metacubex/mihomo/component/tls"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
 	"github.com/metacubex/tls"
 )
 

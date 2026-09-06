@@ -1,101 +1,92 @@
-<h1 align="center">
-  <img src="Meta.png" alt="Meta Kennel" width="200">
-  <br>Meta Kernel<br>
-</h1>
-
-<h3 align="center">Another Mihomo Kernel.</h3>
-
 <p align="center">
-  <a href="https://goreportcard.com/report/github.com/MetaCubeX/mihomo">
-    <img src="https://goreportcard.com/badge/github.com/MetaCubeX/mihomo?style=flat-square">
-  </a>
-  <img src="https://img.shields.io/github/go-mod/go-version/MetaCubeX/mihomo/Alpha?style=flat-square">
-  <a href="https://github.com/MetaCubeX/mihomo/releases">
-    <img src="https://img.shields.io/github/release/MetaCubeX/mihomo/all.svg?style=flat-square">
-  </a>
-  <a href="https://github.com/MetaCubeX/mihomo">
-    <img src="https://img.shields.io/badge/release-Meta-00b4f0?style=flat-square">
-  </a>
+  <img src="assets/hako-logo-256.png" width="128" height="128" alt="Hako">
 </p>
 
-## Features
+# Hako
 
-- Local HTTP/HTTPS/SOCKS server with authentication support
-- VMess, VLESS, Shadowsocks, Trojan, Snell, TUIC, Hysteria protocol support
-- Built-in DNS server that aims to minimize DNS pollution attack impact, supports DoH/DoT upstream and fake IP.
-- Rules based off domains, GEOIP, IPCIDR or Process to forward packets to different nodes
-- Remote groups allow users to implement powerful rules. Supports automatic fallback, load balancing or auto select node
-  based off latency
-- Remote providers, allowing users to get node lists remotely instead of hard-coding in config
-- Netfilter TCP redirecting. Deploy Mihomo on your Internet gateway with `iptables`.
-- Comprehensive HTTP RESTful API controller
+English · [简体中文](README.zh-CN.md)
 
-## Dashboard
+Hako is a proxy kernel based on **mihomo v1.19.30**, with Go bindings and build tooling for Apple applications. It produces `Hako.xcframework` for iOS, macOS and tvOS.
 
-A web dashboard with first-class support for this project has been created; it can be checked out at [metacubexd](https://github.com/MetaCubeX/metacubexd).
+## Upstream history and modifications
 
-## Configration example
+Hako is an independent derivative of [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo), based on [v1.19.30](https://github.com/MetaCubeX/mihomo/tree/v1.19.30), commit `ac017cdd246ce8bd547653d927e7bf77d7ee73d5`. It is not affiliated with MetaCubeX. The upstream project asks unaffiliated downstream projects not to use “mihomo” in their names.
 
-Configuration example is located at [/docs/config.yaml](https://github.com/MetaCubeX/mihomo/blob/Alpha/docs/config.yaml).
+On 2026-09-06, this repository restored the complete upstream ancestry through that baseline, with original commits and contributor identities intact, and retained its existing public history. The reconciliation preserves the previously published source; it changes only these provenance notes. Hako's accumulated changes include Apple bindings, SDK build tooling and kernel adaptations. Compare the upstream baseline with a Hako revision to inspect the full delta; subsequent changes are recorded as incremental public commits.
 
-## Docs
+The upstream GPL-3.0 license remains in [LICENSE](LICENSE). See [NOTICE](NOTICE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for attribution and dependency licenses.
 
-Documentation can be found in [mihomo Docs](https://wiki.metacubex.one/).
+## Official website and client
 
-## For development
+- [Official website](https://clash.md/)
+- [Download Clash on the App Store](https://apps.apple.com/app/id6794257189)
 
-Requirements:
-[Go 1.20 or newer](https://go.dev/dl/)
+If you want to use the app, start with the download above. This repository is for developers building or integrating the kernel.
 
-Build mihomo:
+## Project repositories
 
-```shell
-git clone https://github.com/MetaCubeX/mihomo.git
-cd mihomo && go mod download
-go build
+| Repository | Contents |
+| --- | --- |
+| [Hako](https://github.com/TokenPLS/Hako) | Proxy kernel, Go bindings and Apple SDK build tools |
+| [Hako-Adapter](https://github.com/TokenPLS/Hako-Adapter) | Swift packet-flow bridge and provider lifecycle components |
+| [Hako-Client](https://github.com/TokenPLS/Hako-Client) | Native iOS, iPadOS, macOS and tvOS applications and extensions |
+
+The upstream baseline version describes the proxy engine. It is separate from the App Store app version and the SDK release tag. This source distribution is pre-release; pin a specific revision when integrating it.
+
+## What is included
+
+- The mihomo-based proxy engine: protocol implementations, DNS, routing rules, proxy groups and providers.
+- `bind/hako`: the API exposed to Apple applications through gomobile.
+- `cmd/build_libbox`: SDK generation and platform packaging.
+- [`docs/config.yaml`](docs/config.yaml): configuration reference included with the source.
+
+An application supplies configuration, storage, the Network Extension integration and signing. Platform capabilities differ; a configuration accepted by the parser does not establish end-to-end support for every protocol or rule on every platform.
+
+## Build the Apple SDK
+
+Use macOS with the full Xcode installation and the iOS, macOS and tvOS SDKs. The current build was checked with Xcode 26.6. The binding module declares Go 1.25.0 and selects toolchain Go 1.26.6 in [`bind/hako/go.mod`](bind/hako/go.mod); allow Go to obtain that toolchain, or install it explicitly.
+
+Clone the repository with its history and tags, then install the pinned gomobile tools:
+
+```sh
+git clone https://github.com/TokenPLS/Hako.git
+cd Hako
+go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+go install github.com/sagernet/gomobile/cmd/gobind@v0.1.13
+make lib_apple
 ```
 
-Set go proxy if a connection to GitHub is not possible:
+The build reads version information from Git tags. Keep the tags available when checking out a pinned revision.
 
-```shell
-go env -w GOPROXY=https://goproxy.io,direct
+The output is `Hako.xcframework`, containing five platform slices:
+
+| Platform | Architectures |
+| --- | --- |
+| iOS device | arm64 |
+| iOS Simulator | arm64, x86_64 |
+| macOS | arm64, x86_64 |
+| tvOS device | arm64 |
+| tvOS Simulator | arm64, x86_64 |
+
+Link the framework into each target that uses the API, including the Packet Tunnel extension. The framework is static: choose **Do Not Embed** and link `libresolv`. Use the generated headers for the API of your pinned revision. For a working application integration, see [Hako-Client](https://github.com/TokenPLS/Hako-Client).
+
+## Development and feedback
+
+For the root Go module:
+
+```sh
+go build ./...
+go test ./...
 ```
 
-Build with gvisor tun stack:
+The Apple binding has its own module and tests under `bind/hako`. An SDK build alone does not establish runtime behavior on a signed device.
 
-```shell
-go build -tags with_gvisor
-```
+Report kernel problems in this repository's [Issues](https://github.com/TokenPLS/Hako/issues). Include the source revision, platform, reproduction steps, expected behavior and observed result. Use a minimal sample configuration with secrets removed. For app interface or installation problems, use [Hako-Client Issues](https://github.com/TokenPLS/Hako-Client/issues).
 
-### IPTABLES configuration
+For security reports, follow [SECURITY.md](SECURITY.md).
 
-Work on Linux OS which supported `iptables`
+## License and credits
 
-```yaml
-# Enable the TPROXY listener
-tproxy-port: 9898
+Hako is based on [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo) and the work of its contributors. Hako is an independent project and is not affiliated with or endorsed by MetaCubeX.
 
-iptables:
-  enable: true # default is false
-  inbound-interface: eth0 # detect the inbound interface, default is 'lo'
-```
-
-## Debugging
-
-Check [wiki](https://wiki.metacubex.one/api/#debug) to get an instruction on using debug
-API.
-
-## Credits
-
-- [Dreamacro/clash](https://github.com/Dreamacro/clash)
-- [SagerNet/sing-box](https://github.com/SagerNet/sing-box)
-- [riobard/go-shadowsocks2](https://github.com/riobard/go-shadowsocks2)
-- [v2ray/v2ray-core](https://github.com/v2ray/v2ray-core)
-- [WireGuard/wireguard-go](https://github.com/WireGuard/wireguard-go)
-- [yaling888/clash-plus-pro](https://github.com/yaling888/clash)
-
-## License
-
-This software is released under the GPL-3.0 license.
-
-**In addition, any downstream projects not affiliated with `MetaCubeX` shall not contain the word `mihomo` in their names.**
+The project is licensed under [GPL-3.0](LICENSE). See [NOTICE](NOTICE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for attribution and dependency licenses.

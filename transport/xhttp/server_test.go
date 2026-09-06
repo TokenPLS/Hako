@@ -3,12 +3,42 @@ package xhttp
 import (
 	"io"
 	"net"
+	"strings"
 	"testing"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/http/httptest"
 	"github.com/stretchr/testify/assert"
 )
+
+type retainingResponseWriter struct {
+	header  http.Header
+	payload []byte
+}
+
+func (w *retainingResponseWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *retainingResponseWriter) Write(payload []byte) (int, error) {
+	w.payload = payload
+	return len(payload), nil
+}
+
+func (w *retainingResponseWriter) WriteHeader(int) {}
+
+func TestHTTPServerConnWriteTransfersStablePayload(t *testing.T) {
+	w := &retainingResponseWriter{header: make(http.Header)}
+	conn := newHTTPServerConn(w, io.NopCloser(strings.NewReader("")))
+	payload := []byte("stable")
+
+	n, err := conn.Write(payload)
+	assert.NoError(t, err)
+	assert.Equal(t, len(payload), n)
+
+	payload[0] = 'X'
+	assert.Equal(t, []byte("stable"), w.payload)
+}
 
 func TestServerHandlerModeRestrictions(t *testing.T) {
 	testCases := []struct {

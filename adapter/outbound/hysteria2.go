@@ -7,15 +7,16 @@ import (
 	"net"
 	"net/netip"
 	"strconv"
+	"sync"
 	"time"
 
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/transport/tuic/common"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/transport/tuic/common"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/quic-go"
@@ -33,7 +34,28 @@ type Hysteria2 struct {
 	*Base
 
 	option *Hysteria2Option
-	client *hysteria2.Client
+	// The client is built on the first dial, not at load. NewHysteria2 still
+	// constructs one to keep every load-time rejection exactly where it was
+	// -- construction is the validation -- and then discards it: an idle
+	// node keeps its option and base, not a client, a QUIC config and a
+	// fully expanded port-hopping array per node of a subscription.
+	client      *hysteria2.Client
+	clientOnce  sync.Once
+	clientErr   error
+	buildClient func() (*hysteria2.Client, error)
+}
+
+func (h *Hysteria2) lazyClient() (*hysteria2.Client, error) {
+	h.clientOnce.Do(func() {
+		h.client, h.clientErr = h.buildClient()
+	})
+	return h.client, h.clientErr
+}
+
+func (h *Hysteria2) clientBuilt() bool {
+	built := true
+	h.clientOnce.Do(func() { built = false })
+	return built
 }
 
 type Hysteria2Option struct {
@@ -90,7 +112,11 @@ type Hysteria2RealmOption struct {
 }
 
 func (h *Hysteria2) DialContext(ctx context.Context, metadata *C.Metadata) (_ C.Conn, err error) {
-	c, err := h.client.DialConn(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
+	client, err := h.lazyClient()
+	if err != nil {
+		return nil, err
+	}
+	c, err := client.DialConn(ctx, M.ParseSocksaddrHostPort(metadata.String(), metadata.DstPort))
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +127,11 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 	if err = h.ResolveUDP(ctx, metadata); err != nil {
 		return nil, err
 	}
-	pc, err := h.client.ListenPacket(ctx)
+	client, err := h.lazyClient()
+	if err != nil {
+		return nil, err
+	}
+	pc, err := client.ListenPacket(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +143,7 @@ func (h *Hysteria2) ListenPacketContext(ctx context.Context, metadata *C.Metadat
 
 // Close implements C.ProxyAdapter
 func (h *Hysteria2) Close() error {
-	if h.client != nil {
+	if h.clientBuilt() && h.client != nil {
 		return h.client.CloseWithError(errors.New("proxy removed"))
 	}
 	return nil
@@ -143,179 +173,190 @@ func NewHysteria2(option Hysteria2Option) (*Hysteria2, error) {
 	}
 	outbound.dialer = option.NewDialer(outbound.DialOptions())
 
-	var salamanderPassword string
-	var geckoPassword string
-	var geckoMinPacketSize, geckoMaxPacketSize int
-	if len(option.Obfs) > 0 {
-		if option.ObfsPassword == "" {
-			return nil, errors.New("missing obfs password")
-		}
-		switch option.Obfs {
-		case hysteria2.ObfsTypeSalamander:
-			salamanderPassword = option.ObfsPassword
-		case hysteria2.ObfsTypeGecko:
-			geckoPassword = option.ObfsPassword
-			geckoMinPacketSize = option.ObfsMinPacketSize
-			geckoMaxPacketSize = option.ObfsMaxPacketSize
-		default:
-			return nil, fmt.Errorf("unknown obfs type: %s", option.Obfs)
-		}
-	}
+	build := func() (*hysteria2.Client, error) {
 
-	serverName := option.Server
-	if option.SNI != "" {
-		serverName = option.SNI
-	}
-
-	tlsConfig, err := ca.GetTLSConfig(ca.Option{
-		TLSConfig: &tls.Config{
-			ServerName:         serverName,
-			InsecureSkipVerify: option.SkipCertVerify,
-			MinVersion:         tls.VersionTLS13,
-		},
-		Fingerprint:    option.Fingerprint,
-		NameCertVerify: option.NameCertVerify,
-		Certificate:    option.Certificate,
-		PrivateKey:     option.PrivateKey,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if option.ALPN != nil { // structure's Decode will ensure value not nil when input has value even it was set an empty array
-		tlsConfig.NextProtos = option.ALPN
-	}
-
-	tlsClientConfig := tlsConfig
-	echConfig, err := option.ECHOpts.Parse()
-	if err != nil {
-		return nil, err
-	}
-
-	if option.UdpMTU == 0 {
-		// "1200" from quic-go's MaxDatagramSize
-		// "-3" from quic-go's DatagramFrame.MaxDataLen
-		option.UdpMTU = 1200 - 3
-	}
-
-	quicConfig := &quic.Config{
-		InitialStreamReceiveWindow:     option.InitialStreamReceiveWindow,
-		MaxStreamReceiveWindow:         option.MaxStreamReceiveWindow,
-		InitialConnectionReceiveWindow: option.InitialConnectionReceiveWindow,
-		MaxConnectionReceiveWindow:     option.MaxConnectionReceiveWindow,
-	}
-
-	clientOptions := hysteria2.ClientOptions{
-		Context:            context.TODO(),
-		Logger:             log.SingLogger,
-		SendBPS:            utils.StringToBps(option.Up),
-		ReceiveBPS:         utils.StringToBps(option.Down),
-		SalamanderPassword: salamanderPassword,
-		GeckoPassword:      geckoPassword,
-		GeckoMinPacketSize: geckoMinPacketSize,
-		GeckoMaxPacketSize: geckoMaxPacketSize,
-		Password:           option.Password,
-		TLSConfig:          tlsClientConfig,
-		QUICConfig:         quicConfig,
-		UDPDisabled:        false,
-		UdpMTU:             option.UdpMTU,
-		ServerAddress:      M.ParseSocksaddr(addr),
-		PacketListener:     outbound.dialer,
-		QuicDialer: qtls.QuicDialerFunc(func(ctx context.Context, addr string, dialer qtls.PacketDialer, tlsCfg *tls.Config, cfg *quic.Config, early bool) (net.PacketConn, *quic.Conn, error) {
-			err := echConfig.ClientHandle(ctx, tlsCfg)
-			if err != nil {
-				return nil, nil, err
+		var salamanderPassword string
+		var geckoPassword string
+		var geckoMinPacketSize, geckoMaxPacketSize int
+		if len(option.Obfs) > 0 {
+			if option.ObfsPassword == "" {
+				return nil, errors.New("missing obfs password")
 			}
-			return common.DialQuic(ctx, addr, outbound.DialOptions(), dialer, tlsCfg, cfg, common.DialQuicOption{Early: early})
-		}),
-		SetBBRCongestion: func(quicConn *quic.Conn) {
-			common.SetCongestionController(quicConn, "bbr", option.CWND, option.BBRProfile)
-		},
-		HandshakeTimeout: time.Duration(option.HandshakeTimeout) * time.Second,
-	}
+			switch option.Obfs {
+			case hysteria2.ObfsTypeSalamander:
+				salamanderPassword = option.ObfsPassword
+			case hysteria2.ObfsTypeGecko:
+				geckoPassword = option.ObfsPassword
+				geckoMinPacketSize = option.ObfsMinPacketSize
+				geckoMaxPacketSize = option.ObfsMaxPacketSize
+			default:
+				return nil, fmt.Errorf("unknown obfs type: %s", option.Obfs)
+			}
+		}
 
-	var serverPorts []uint16
-	if option.Ports != "" {
-		ranges, err := utils.NewUnsignedRanges[uint16](option.Ports)
+		serverName := option.Server
+		if option.SNI != "" {
+			serverName = option.SNI
+		}
+
+		tlsConfig, err := ca.GetTLSConfig(ca.Option{
+			TLSConfig: &tls.Config{
+				ServerName:         serverName,
+				InsecureSkipVerify: option.SkipCertVerify,
+				MinVersion:         tls.VersionTLS13,
+			},
+			Fingerprint:    option.Fingerprint,
+			NameCertVerify: option.NameCertVerify,
+			Certificate:    option.Certificate,
+			PrivateKey:     option.PrivateKey,
+		})
 		if err != nil {
 			return nil, err
 		}
-		ranges.Range(func(port uint16) bool {
-			serverPorts = append(serverPorts, port)
-			return true
-		})
-		if len(serverPorts) > 0 {
-			hopRange, err := utils.NewUnsignedRange[uint64](option.HopInterval)
+
+		if option.ALPN != nil { // structure's Decode will ensure value not nil when input has value even it was set an empty array
+			tlsConfig.NextProtos = option.ALPN
+		}
+
+		tlsClientConfig := tlsConfig
+		echConfig, err := option.ECHOpts.Parse()
+		if err != nil {
+			return nil, err
+		}
+
+		if option.UdpMTU == 0 {
+			// "1200" from quic-go's MaxDatagramSize
+			// "-3" from quic-go's DatagramFrame.MaxDataLen
+			option.UdpMTU = 1200 - 3
+		}
+
+		quicConfig := &quic.Config{
+			InitialStreamReceiveWindow:     option.InitialStreamReceiveWindow,
+			MaxStreamReceiveWindow:         option.MaxStreamReceiveWindow,
+			InitialConnectionReceiveWindow: option.InitialConnectionReceiveWindow,
+			MaxConnectionReceiveWindow:     option.MaxConnectionReceiveWindow,
+		}
+
+		clientOptions := hysteria2.ClientOptions{
+			Context:            context.TODO(),
+			Logger:             log.SingLogger,
+			SendBPS:            utils.StringToBps(option.Up),
+			ReceiveBPS:         utils.StringToBps(option.Down),
+			SalamanderPassword: salamanderPassword,
+			GeckoPassword:      geckoPassword,
+			GeckoMinPacketSize: geckoMinPacketSize,
+			GeckoMaxPacketSize: geckoMaxPacketSize,
+			Password:           option.Password,
+			TLSConfig:          tlsClientConfig,
+			QUICConfig:         quicConfig,
+			UDPDisabled:        false,
+			UdpMTU:             option.UdpMTU,
+			ServerAddress:      M.ParseSocksaddr(addr),
+			PacketListener:     outbound.dialer,
+			QuicDialer: qtls.QuicDialerFunc(func(ctx context.Context, addr string, dialer qtls.PacketDialer, tlsCfg *tls.Config, cfg *quic.Config, early bool) (net.PacketConn, *quic.Conn, error) {
+				err := echConfig.ClientHandle(ctx, tlsCfg)
+				if err != nil {
+					return nil, nil, err
+				}
+				return common.DialQuic(ctx, addr, outbound.DialOptions(), dialer, tlsCfg, cfg, common.DialQuicOption{Early: early})
+			}),
+			SetBBRCongestion: func(quicConn *quic.Conn) {
+				common.SetCongestionController(quicConn, "bbr", option.CWND, option.BBRProfile)
+			},
+			HandshakeTimeout: time.Duration(option.HandshakeTimeout) * time.Second,
+		}
+
+		var serverPorts []uint16
+		if option.Ports != "" {
+			ranges, err := utils.NewUnsignedRanges[uint16](option.Ports)
 			if err != nil {
 				return nil, err
 			}
-			start, end := hopRange.Start(), hopRange.End()
-			if start == 0 {
-				start = defaultHopInterval
-			} else if start < minHopInterval {
-				start = minHopInterval
-			}
-			if end < start {
-				end = start
-			}
-			clientOptions.HopInterval = time.Duration(start) * time.Second
-			clientOptions.HopIntervalMax = time.Duration(end) * time.Second
-			clientOptions.ServerPorts = serverPorts
-		}
-	}
-	if option.Port == 0 && len(serverPorts) == 0 {
-		return nil, errors.New("invalid port")
-	}
-
-	if option.RealmOpts.Enable {
-		httpTLSClientConfig, err := ca.GetTLSConfig(ca.Option{
-			TLSConfig: &tls.Config{
-				ServerName:         option.RealmOpts.SNI,
-				InsecureSkipVerify: option.RealmOpts.SkipCertVerify,
-				NextProtos:         option.RealmOpts.ALPN,
-			},
-			Fingerprint:    option.RealmOpts.Fingerprint,
-			NameCertVerify: option.RealmOpts.NameCertVerify,
-			Certificate:    option.RealmOpts.Certificate,
-			PrivateKey:     option.RealmOpts.PrivateKey,
-		})
-		if err != nil {
-			return nil, err
-		}
-		clientOptions.RealmOptions = &realm.Options{
-			ServerURL:   option.RealmOpts.ServerURL,
-			Token:       option.RealmOpts.Token,
-			RealmID:     option.RealmOpts.RealmID,
-			STUNServers: option.RealmOpts.STUNServers,
-			HTTPClient: &http.Client{
-				Transport: &http.Transport{
-					DialContext:     outbound.dialer.DialContext,
-					TLSClientConfig: httpTLSClientConfig,
-					// from http.DefaultTransport
-					ForceAttemptHTTP2:     true,
-					MaxIdleConns:          100,
-					IdleConnTimeout:       90 * time.Second,
-					TLSHandshakeTimeout:   10 * time.Second,
-					ExpectContinueTimeout: 1 * time.Second,
-				},
-			},
-			Resolver: func(ctx context.Context, host string, ipv4, ipv6 bool) ([]netip.Addr, error) {
-				if ipv4 && !ipv6 {
-					return resolver.LookupIPv4WithResolver(ctx, host, resolver.ProxyServerHostResolver)
-				} else if ipv6 && !ipv4 {
-					return resolver.LookupIPv6WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+			ranges.Range(func(port uint16) bool {
+				serverPorts = append(serverPorts, port)
+				return true
+			})
+			if len(serverPorts) > 0 {
+				hopRange, err := utils.NewUnsignedRange[uint64](option.HopInterval)
+				if err != nil {
+					return nil, err
 				}
-				return resolver.LookupIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
-			},
-			Logger: log.SingLogger,
+				start, end := hopRange.Start(), hopRange.End()
+				if start == 0 {
+					start = defaultHopInterval
+				} else if start < minHopInterval {
+					start = minHopInterval
+				}
+				if end < start {
+					end = start
+				}
+				clientOptions.HopInterval = time.Duration(start) * time.Second
+				clientOptions.HopIntervalMax = time.Duration(end) * time.Second
+				clientOptions.ServerPorts = serverPorts
+			}
 		}
+		if option.Port == 0 && len(serverPorts) == 0 {
+			return nil, errors.New("invalid port")
+		}
+
+		if option.RealmOpts.Enable {
+			httpTLSClientConfig, err := ca.GetTLSConfig(ca.Option{
+				TLSConfig: &tls.Config{
+					ServerName:         option.RealmOpts.SNI,
+					InsecureSkipVerify: option.RealmOpts.SkipCertVerify,
+					NextProtos:         option.RealmOpts.ALPN,
+				},
+				Fingerprint:    option.RealmOpts.Fingerprint,
+				NameCertVerify: option.RealmOpts.NameCertVerify,
+				Certificate:    option.RealmOpts.Certificate,
+				PrivateKey:     option.RealmOpts.PrivateKey,
+			})
+			if err != nil {
+				return nil, err
+			}
+			clientOptions.RealmOptions = &realm.Options{
+				ServerURL:   option.RealmOpts.ServerURL,
+				Token:       option.RealmOpts.Token,
+				RealmID:     option.RealmOpts.RealmID,
+				STUNServers: option.RealmOpts.STUNServers,
+				HTTPClient: &http.Client{
+					Transport: &http.Transport{
+						DialContext:     outbound.dialer.DialContext,
+						TLSClientConfig: httpTLSClientConfig,
+						// from http.DefaultTransport
+						ForceAttemptHTTP2:     true,
+						MaxIdleConns:          100,
+						IdleConnTimeout:       90 * time.Second,
+						TLSHandshakeTimeout:   10 * time.Second,
+						ExpectContinueTimeout: 1 * time.Second,
+					},
+				},
+				Resolver: func(ctx context.Context, host string, ipv4, ipv6 bool) ([]netip.Addr, error) {
+					if ipv4 && !ipv6 {
+						return resolver.LookupIPv4WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+					} else if ipv6 && !ipv4 {
+						return resolver.LookupIPv6WithResolver(ctx, host, resolver.ProxyServerHostResolver)
+					}
+					return resolver.LookupIPWithResolver(ctx, host, resolver.ProxyServerHostResolver)
+				},
+				Logger: log.SingLogger,
+			}
+		}
+
+		return hysteria2.NewClient(clientOptions)
 	}
 
-	client, err := hysteria2.NewClient(clientOptions)
+	// Construction is the validation: run the whole build once at load so a
+	// bad option is rejected exactly where it always was, then let go of the
+	// result -- a client that never dialed holds no connection, and
+	// CloseWithError on it is a no-op that keeps that true if the transport
+	// ever grows construction-time resources.
+	probe, err := build()
 	if err != nil {
 		return nil, err
 	}
-	outbound.client = client
+	_ = probe.CloseWithError(nil)
+	outbound.buildClient = build
 
 	return outbound, nil
 }

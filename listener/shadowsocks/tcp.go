@@ -5,22 +5,23 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/jls"
-	"github.com/metacubex/mihomo/listener/restls"
-	"github.com/metacubex/mihomo/listener/shadowtls"
-	"github.com/metacubex/mihomo/listener/sing"
-	"github.com/metacubex/mihomo/transport/shadowsocks/core"
-	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/jls"
+	"github.com/TokenPLS/Hako/listener/restls"
+	"github.com/TokenPLS/Hako/listener/shadowtls"
+	"github.com/TokenPLS/Hako/listener/sing"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/core"
+	obfs "github.com/TokenPLS/Hako/transport/simple-obfs"
+	"github.com/TokenPLS/Hako/transport/socks5"
 )
 
 type Listener struct {
-	closed       bool
+	closed       atomic.Bool
 	config       LC.ShadowsocksServer
 	listeners    []net.Listener
 	udpListeners []*UDPListener
@@ -29,7 +30,7 @@ type Listener struct {
 	simpleObfs   func(net.Conn) net.Conn
 }
 
-var _listener *Listener
+var defaultListener atomic.Pointer[Listener]
 
 func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (*Listener, error) {
 	pickCipher, err := core.PickCipher(config.Cipher, nil, config.Password)
@@ -48,7 +49,7 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 	}
 
 	sl := &Listener{config: config, pickCipher: pickCipher, handler: h}
-	_listener = sl
+	defaultListener.Store(sl)
 
 	securityModes := make([]string, 0, 3)
 	if config.ShadowTLS.Enable {
@@ -126,7 +127,7 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 			for {
 				c, err := l.Accept()
 				if err != nil {
-					if sl.closed {
+					if sl.closed.Load() {
 						break
 					}
 					continue
@@ -140,6 +141,8 @@ func New(config LC.ShadowsocksServer, lc C.InboundListenConfig, tunnel C.Tunnel,
 }
 
 func (l *Listener) Close() error {
+	l.closed.Store(true)
+	defaultListener.CompareAndSwap(l, nil)
 	var retErr error
 	for _, lis := range l.listeners {
 		err := lis.Close()
@@ -194,8 +197,9 @@ func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 }
 
 func HandleShadowSocks(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) bool {
-	if _listener != nil && _listener.pickCipher != nil {
-		go _listener.HandleConn(conn, tunnel, additions...)
+	listener := defaultListener.Load()
+	if listener != nil && listener.pickCipher != nil {
+		go listener.HandleConn(conn, tunnel, additions...)
 		return true
 	}
 	return false

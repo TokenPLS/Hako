@@ -38,8 +38,8 @@
             ldflags = [
               "-s"
               "-w"
-              "-X github.com/metacubex/mihomo/constant.Version=dev-${version}"
-              "-X github.com/metacubex/mihomo/constant.BuildTime=${version}"
+              "-X github.com/TokenPLS/Hako/constant.Version=dev-${version}"
+              "-X github.com/TokenPLS/Hako/constant.BuildTime=${version}"
             ];
             
             tags = [

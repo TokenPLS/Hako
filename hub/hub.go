@@ -1,10 +1,10 @@
 package hub
 
 import (
-	"github.com/metacubex/mihomo/config"
-	"github.com/metacubex/mihomo/hub/executor"
-	"github.com/metacubex/mihomo/hub/route"
-	"github.com/metacubex/mihomo/log"
+	"github.com/TokenPLS/Hako/config"
+	"github.com/TokenPLS/Hako/hub/executor"
+	"github.com/TokenPLS/Hako/hub/route"
+	"github.com/TokenPLS/Hako/log"
 )
 
 type Option func(*config.Config)

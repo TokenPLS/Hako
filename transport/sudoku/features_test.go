@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
+	sudokuobfs "github.com/TokenPLS/Hako/transport/sudoku/obfs/sudoku"
 )
 
 func TestCustomTablesRotation_ProbedByServer(t *testing.T) {

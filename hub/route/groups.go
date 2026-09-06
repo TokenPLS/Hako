@@ -5,11 +5,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/outboundgroup"
-	"github.com/metacubex/mihomo/common/utils"
-	"github.com/metacubex/mihomo/component/profile/cachefile"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/tunnel"
+	"github.com/TokenPLS/Hako/adapter/outboundgroup"
+	"github.com/TokenPLS/Hako/common/utils"
+	"github.com/TokenPLS/Hako/component/profile/cachefile"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/tunnel"
 
 	"github.com/metacubex/chi"
 	"github.com/metacubex/chi/render"

@@ -5,24 +5,25 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/ech"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/jls"
-	"github.com/metacubex/mihomo/listener/reality"
-	"github.com/metacubex/mihomo/listener/restls"
-	"github.com/metacubex/mihomo/listener/shadowtls"
-	"github.com/metacubex/mihomo/listener/sing"
-	"github.com/metacubex/mihomo/listener/tlsmirror"
-	"github.com/metacubex/mihomo/ntp"
-	"github.com/metacubex/mihomo/transport/gun"
-	"github.com/metacubex/mihomo/transport/mekya"
-	"github.com/metacubex/mihomo/transport/mkcp"
-	mihomoVMess "github.com/metacubex/mihomo/transport/vmess"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/ech"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/jls"
+	"github.com/TokenPLS/Hako/listener/reality"
+	"github.com/TokenPLS/Hako/listener/restls"
+	"github.com/TokenPLS/Hako/listener/shadowtls"
+	"github.com/TokenPLS/Hako/listener/sing"
+	"github.com/TokenPLS/Hako/listener/tlsmirror"
+	"github.com/TokenPLS/Hako/ntp"
+	"github.com/TokenPLS/Hako/transport/gun"
+	"github.com/TokenPLS/Hako/transport/mekya"
+	"github.com/TokenPLS/Hako/transport/mkcp"
+	mihomoVMess "github.com/TokenPLS/Hako/transport/vmess"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/mhurl"
@@ -34,13 +35,13 @@ import (
 )
 
 type Listener struct {
-	closed    bool
+	closed    atomic.Bool
 	config    LC.VmessServer
 	listeners []net.Listener
 	service   *vmess.Service[string]
 }
 
-var _listener *Listener
+var defaultListener atomic.Pointer[Listener]
 
 func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, additions ...inbound.Addition) (sl *Listener, err error) {
 	if len(additions) == 0 {
@@ -49,7 +50,7 @@ func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			inbound.WithSpecialRules(""),
 		}
 		defer func() {
-			_listener = sl
+			defaultListener.Store(sl)
 		}()
 	}
 	h, err := sing.NewListenerHandler(sing.ListenerConfig{
@@ -90,7 +91,7 @@ func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 		return nil, err
 	}
 
-	sl = &Listener{false, config, nil, service}
+	sl = &Listener{config: config, service: service}
 
 	httpServer := http.Server{
 		IdleTimeout: 30 * time.Second,
@@ -290,7 +291,7 @@ func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 			for {
 				c, err := l.Accept()
 				if err != nil {
-					if sl.closed {
+					if sl.closed.Load() {
 						break
 					}
 					continue
@@ -305,7 +306,8 @@ func New(config LC.VmessServer, lc C.InboundListenConfig, tunnel C.Tunnel, addit
 }
 
 func (l *Listener) Close() error {
-	l.closed = true
+	l.closed.Store(true)
+	defaultListener.CompareAndSwap(l, nil)
 	var retErr error
 	for _, lis := range l.listeners {
 		err := lis.Close()
@@ -344,8 +346,9 @@ func (l *Listener) HandleConn(conn net.Conn, tunnel C.Tunnel, additions ...inbou
 }
 
 func HandleVmess(conn net.Conn, tunnel C.Tunnel, additions ...inbound.Addition) bool {
-	if _listener != nil && _listener.service != nil {
-		go _listener.HandleConn(conn, tunnel, additions...)
+	listener := defaultListener.Load()
+	if listener != nil && listener.service != nil {
+		go listener.HandleConn(conn, tunnel, additions...)
 		return true
 	}
 	return false

@@ -11,11 +11,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/metacubex/mihomo/common/httputils"
-	"github.com/metacubex/mihomo/common/once"
-	"github.com/metacubex/mihomo/component/dialer"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/vmess"
+	"github.com/TokenPLS/Hako/common/httputils"
+	"github.com/TokenPLS/Hako/common/once"
+	"github.com/TokenPLS/Hako/component/dialer"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/vmess"
 
 	"github.com/metacubex/http"
 	"golang.org/x/exp/slices"

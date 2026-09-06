@@ -5,14 +5,14 @@ import (
 	"errors"
 	"net"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/component/ech"
-	C "github.com/metacubex/mihomo/constant"
-	authStore "github.com/metacubex/mihomo/listener/auth"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/reality"
-	"github.com/metacubex/mihomo/ntp"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/component/ech"
+	C "github.com/TokenPLS/Hako/constant"
+	authStore "github.com/TokenPLS/Hako/listener/auth"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/reality"
+	"github.com/TokenPLS/Hako/ntp"
 
 	"github.com/metacubex/tls"
 )

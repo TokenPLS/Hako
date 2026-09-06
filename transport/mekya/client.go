@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/httputils"
-	tlsC "github.com/metacubex/mihomo/component/tls"
-	"github.com/metacubex/mihomo/transport/mkcp"
+	"github.com/TokenPLS/Hako/common/httputils"
+	tlsC "github.com/TokenPLS/Hako/component/tls"
+	"github.com/TokenPLS/Hako/transport/mkcp"
 
 	"github.com/metacubex/http"
 	"github.com/metacubex/http/httptrace"

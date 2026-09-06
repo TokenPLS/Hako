@@ -16,7 +16,7 @@ type Table struct {
 	EncodeTable [256][][4]byte
 	DecodeMap   map[uint32]byte
 	PaddingPool []byte
-	IsASCII     bool // 标记当前模式
+	IsASCII     bool
 	layout      *byteLayout
 	opposite    *Table
 	hint        uint32
@@ -79,7 +79,6 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 	}
 	t.PaddingPool = append(t.PaddingPool, layout.paddingPool...)
 
-	// 生成数独网格 (逻辑不变)
 	allGrids := GenerateAllGrids()
 	h := sha256.New()
 	h.Write([]byte(key))
@@ -92,7 +91,6 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 		shuffledGrids[i], shuffledGrids[j] = shuffledGrids[j], shuffledGrids[i]
 	})
 
-	// 预计算组合
 	var combinations [][]int
 	var combine func(int, int, []int)
 	combine = func(s, k int, c []int) {
@@ -110,14 +108,11 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 	}
 	combine(0, 4, []int{})
 
-	// 构建映射表
 	for byteVal := 0; byteVal < 256; byteVal++ {
 		targetGrid := shuffledGrids[byteVal]
 		for _, positions := range combinations {
 			var currentHints [4]byte
 
-			// 1. 计算抽象提示 (Abstract Hints)
-			// 我们先计算出 val 和 pos，后面再根据模式编码成 byte
 			var rawParts [4]struct{ val, pos byte }
 
 			for i, pos := range positions {
@@ -125,7 +120,6 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 				rawParts[i] = struct{ val, pos byte }{val, uint8(pos)}
 			}
 
-			// 检查唯一性 (数独逻辑)
 			matchCount := 0
 			for _, g := range allGrids {
 				match := true
@@ -144,13 +138,11 @@ func newSingleDirectionTable(key string, mode string, customPattern string) (*Ta
 			}
 
 			if matchCount == 1 {
-				// 唯一确定，生成最终编码字节
 				for i, p := range rawParts {
 					currentHints[i] = t.layout.hintByte(p.val-1, p.pos)
 				}
 
 				t.EncodeTable[byteVal] = append(t.EncodeTable[byteVal], currentHints)
-				// 生成解码键 (需要对 Hints 进行排序以忽略传输顺序)
 				key := packHintsToKey(currentHints)
 				t.DecodeMap[key] = byte(byteVal)
 			}

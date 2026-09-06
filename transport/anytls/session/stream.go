@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/transport/anytls/pipe"
+	"github.com/TokenPLS/Hako/transport/anytls/pipe"
 )
 
 // Stream implements net.Conn
@@ -21,6 +21,7 @@ type Stream struct {
 	writeDeadline pipe.PipeDeadline
 
 	dieOnce sync.Once
+	stateMu sync.RWMutex
 	dieHook func()
 	dieErr  error
 
@@ -40,8 +41,10 @@ func newStream(id uint32, sess *Session) *Stream {
 // Read implements net.Conn
 func (s *Stream) Read(b []byte) (n int, err error) {
 	n, err = s.pipeR.Read(b)
-	if n == 0 && s.dieErr != nil {
-		err = s.dieErr
+	if n == 0 {
+		if terminalErr := s.terminalError(); terminalErr != nil {
+			err = terminalErr
+		}
 	}
 	return
 }
@@ -53,8 +56,8 @@ func (s *Stream) Write(b []byte) (n int, err error) {
 		return 0, os.ErrDeadlineExceeded
 	default:
 	}
-	if s.dieErr != nil {
-		return 0, s.dieErr
+	if terminalErr := s.terminalError(); terminalErr != nil {
+		return 0, terminalErr
 	}
 	n, err = s.sess.writeDataFrame(s.id, b)
 	return
@@ -67,37 +70,52 @@ func (s *Stream) Close() error {
 
 // closeLocally only closes Stream and don't notify remote peer
 func (s *Stream) closeLocally() {
-	var once bool
-	s.dieOnce.Do(func() {
-		s.dieErr = net.ErrClosed
-		s.pipeR.Close()
-		once = true
-	})
+	once, dieHook := s.finish(net.ErrClosed)
 	if once {
-		if s.dieHook != nil {
-			s.dieHook()
-			s.dieHook = nil
+		if dieHook != nil {
+			dieHook()
 		}
 	}
 }
 
 func (s *Stream) closeWithError(err error) error {
+	once, dieHook := s.finish(err)
+	if once {
+		closeErr := s.sess.streamClosed(s.id)
+		if dieHook != nil {
+			dieHook()
+		}
+		return closeErr
+	} else {
+		return s.terminalError()
+	}
+}
+
+func (s *Stream) finish(err error) (bool, func()) {
 	var once bool
+	var dieHook func()
 	s.dieOnce.Do(func() {
+		s.stateMu.Lock()
 		s.dieErr = err
+		dieHook = s.dieHook
+		s.dieHook = nil
+		s.stateMu.Unlock()
 		s.pipeR.Close()
 		once = true
 	})
-	if once {
-		err := s.sess.streamClosed(s.id)
-		if s.dieHook != nil {
-			s.dieHook()
-			s.dieHook = nil
-		}
-		return err
-	} else {
-		return s.dieErr
-	}
+	return once, dieHook
+}
+
+func (s *Stream) terminalError() error {
+	s.stateMu.RLock()
+	defer s.stateMu.RUnlock()
+	return s.dieErr
+}
+
+func (s *Stream) setDieHook(dieHook func()) {
+	s.stateMu.Lock()
+	s.dieHook = dieHook
+	s.stateMu.Unlock()
 }
 
 func (s *Stream) SetReadDeadline(t time.Time) error {

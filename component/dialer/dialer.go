@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/component/keepalive"
-	"github.com/metacubex/mihomo/component/mptcp"
-	"github.com/metacubex/mihomo/component/resolver"
+	"github.com/TokenPLS/Hako/common/atomic"
+	"github.com/TokenPLS/Hako/component/keepalive"
+	"github.com/TokenPLS/Hako/component/mptcp"
+	"github.com/TokenPLS/Hako/component/resolver"
 )
 
 const (
@@ -83,7 +83,25 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 	if opt.addrReuse {
 		addrReuseToListenConfig(lc)
 	}
-	if DefaultSocketHook != nil { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CMFA)
+	// A socket hook owns the socket's scoping (see DialContext), but it is
+	// handed the LOCAL address only and every outbound UDP dial passes "" for
+	// that -- so the hook cannot see the peer, and the exemption below it for
+	// a loopback peer never ran while a hook was installed. Apple installs one
+	// unconditionally, and a proxy whose server sat on 127.0.0.1 got its UDP
+	// bound to a physical interface and "can't assign requested address". A
+	// peer that is not global unicast therefore takes the hook-less branch,
+	// where upstream's own exemption already lives; a routable peer, or no
+	// peer at all, is scoped by the hook as before.
+	//
+	// The exemption is conditioned on SocketHookScopesInterfaceOnly so it
+	// applies to a hook that does nothing but scope. A hook that audits or tags
+	// still sees every socket, which is what it saw before -- skipping it
+	// would have been a silent change to somebody else's contract.
+	peerScopable := !rAddrPort.IsValid() || rAddrPort.Addr().Unmap().IsGlobalUnicast()
+	if !SocketHookScopesInterfaceOnly {
+		peerScopable = true
+	}
+	if DefaultSocketHook != nil && peerScopable { // ignore interfaceName, routingMark when DefaultSocketHook not null (in CMFA)
 		socketHookToListenConfig(lc)
 	} else {
 		if opt.interfaceName == "" {
@@ -94,8 +112,11 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 				opt.interfaceName = finder.FindInterfaceName(rAddrPort.Addr().Unmap())
 			}
 		}
-		if rAddrPort.Addr().Unmap().IsLoopback() {
+		if !peerScopable {
 			// avoid "The requested address is not valid in its context."
+			// Upstream tested IsLoopback here; not-global-unicast is what its
+			// darwin bindControl tests (bind_darwin.go:14-19), and the two
+			// paths should refuse to scope the same peers.
 			opt.interfaceName = ""
 		}
 		if opt.interfaceName != "" {
@@ -123,6 +144,30 @@ func ListenPacket(ctx context.Context, network, address string, rAddrPort netip.
 func dialContext(ctx context.Context, network string, destination netip.Addr, port string, opt option) (net.Conn, error) {
 	var address string
 	destination, port = resolver.LookupIP4P(destination, port)
+	originalDestination := destination
+	var err error
+	destination, err = TransformPhysicalAddress(network, destination)
+	if err != nil {
+		return nil, err
+	}
+	// IPv4Only/IPv6Only select the logical DNS answer family. A platform
+	// transform may still need an IPv6 socket to reach that IPv4 target through
+	// NAT64 (or vice versa), so align the concrete socket family afterwards.
+	if originalDestination.Is4() && destination.Is6() {
+		switch network {
+		case "tcp4":
+			network = "tcp6"
+		case "udp4":
+			network = "udp6"
+		}
+	} else if originalDestination.Is6() && destination.Is4() {
+		switch network {
+		case "tcp6":
+			network = "tcp4"
+		case "udp6":
+			network = "udp4"
+		}
+	}
 	address = net.JoinHostPort(destination.String(), port)
 
 	netDialer := opt.netDialer
@@ -140,7 +185,12 @@ func dialContext(ctx context.Context, network string, destination netip.Addr, po
 	keepalive.SetNetDialer(dialer)
 	mptcp.SetNetDialer(dialer, opt.mpTcp)
 
-	if DefaultSocketHook != nil { // ignore interfaceName, routingMark and tfo when DefaultSocketHook not null (in CMFA)
+	// A socket hook owns the socket's scoping, so interfaceName, routingMark and tfo are
+	// deliberately ignored while one is installed. The comment here used to say "in CMFA",
+	// which reads as Android-only; the Apple binding installs the same hook
+	// (bind/hako/hook.go), so this branch is the normal path on iOS and macOS too. That
+	// mis-reading is what left the tfo option labelled as effective in the iOS UI.
+	if DefaultSocketHook != nil {
 		socketHookToToDialer(dialer)
 	} else {
 		if opt.interfaceName == "" {
@@ -217,8 +267,19 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 	}
 
 	preferIPVersion := opt.prefer
-	fallbackTicker := time.NewTicker(dualStackFallbackTimeout)
-	defer fallbackTicker.Stop()
+
+	// The fallback ticker only ever fires for a fallback that exists, and a fallback
+	// only exists when one leg is non-primary -- which requires prefer to be 4 or 6.
+	// With prefer unset both legs are primary, the first success returns immediately,
+	// and the ticker is allocated and stopped for nothing on every dual-stack dial.
+	// Created only when it can fire; a nil channel blocks forever in select, which is
+	// exactly the wanted behaviour.
+	var fallbackTick <-chan time.Time
+	if preferIPVersion == 4 || preferIPVersion == 6 {
+		fallbackTicker := time.NewTicker(dualStackFallbackTimeout)
+		defer fallbackTicker.Stop()
+		fallbackTick = fallbackTicker.C
+	}
 
 	results := make(chan dialResult)
 	returned := make(chan struct{})
@@ -226,7 +287,28 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 
 	var wg sync.WaitGroup
 
-	racer := func(ips []netip.Addr, isPrimary bool) {
+	// Each leg gets its own cancellable context so a leg we are no longer waiting for is
+	// released immediately. Previously both legs ran on the caller's context, so a leg
+	// that stalled held its dial -- and its socket, and the radio wake behind it -- until
+	// the caller's own deadline, five seconds by default.
+	//
+	// EVERY leg's cancel runs before returning, the winner's included. An earlier version
+	// spared the winner out of caution about a custom opt.netDialer still using its
+	// context; that was wrong, because Go retains a cancellable child in its parent's
+	// children set until one of the two cancels runs, so one uncancelled winner per
+	// successful dial accumulated for the parent's whole life. Cancelling the winner is
+	// safe by the contract net.Dialer documents -- a connection, once established, is
+	// unaffected by later expiry of its dial context -- and this tree already depends on
+	// exactly that: tunnel.go dials under a WithTimeout it cancels immediately afterwards
+	// and then uses the connection for the rest of its life.
+	cancels := make([]context.CancelFunc, 0, 2)
+	cancelAllLegs := func() {
+		for _, cancel := range cancels {
+			cancel()
+		}
+	}
+
+	racer := func(legCtx context.Context, cancel context.CancelFunc, leg int, ips []netip.Addr, isPrimary bool) {
 		defer wg.Done()
 		result := dialResult{isPrimary: isPrimary}
 		defer func() {
@@ -236,19 +318,26 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 				if result.Conn != nil && result.error == nil {
 					_ = result.Conn.Close()
 				}
+				cancel()
 			}
 		}()
-		result.Conn, result.error = dialFn(ctx, network, ips, port, opt)
+		result.Conn, result.error = dialFn(legCtx, network, ips, port, opt)
+	}
+
+	startRacer := func(ips []netip.Addr, isPrimary bool) {
+		legCtx, cancel := context.WithCancel(ctx)
+		leg := len(cancels)
+		cancels = append(cancels, cancel)
+		wg.Add(1)
+		go racer(legCtx, cancel, leg, ips, isPrimary)
 	}
 
 	if len(ipv4s) != 0 {
-		wg.Add(1)
-		go racer(ipv4s, preferIPVersion != 6)
+		startRacer(ipv4s, preferIPVersion != 6)
 	}
 
 	if len(ipv6s) != 0 {
-		wg.Add(1)
-		go racer(ipv6s, preferIPVersion != 4)
+		startRacer(ipv6s, preferIPVersion != 4)
 	}
 
 	go func() {
@@ -262,8 +351,9 @@ func dualStackDialContext(ctx context.Context, dialFn dialFunc, network string, 
 loop:
 	for {
 		select {
-		case <-fallbackTicker.C:
+		case <-fallbackTick:
 			if fallback.error == nil && fallback.Conn != nil {
+				cancelAllLegs()
 				return fallback.Conn, nil
 			}
 		case res, ok := <-results:
@@ -277,6 +367,7 @@ loop:
 							_ = fallback.Conn.Close()
 						}()
 					}
+					cancelAllLegs()
 					return res.Conn, nil
 				}
 				fallback = res
@@ -291,8 +382,10 @@ loop:
 	}
 
 	if fallback.error == nil && fallback.Conn != nil {
+		cancelAllLegs()
 		return fallback.Conn, nil
 	}
+	cancelAllLegs()
 	return nil, errors.Join(errs...)
 }
 

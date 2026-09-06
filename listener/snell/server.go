@@ -12,17 +12,17 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	N "github.com/metacubex/mihomo/common/net"
-	"github.com/metacubex/mihomo/common/utils"
-	C "github.com/metacubex/mihomo/constant"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/listener/jls"
-	"github.com/metacubex/mihomo/listener/restls"
-	"github.com/metacubex/mihomo/listener/shadowtls"
-	"github.com/metacubex/mihomo/transport/shadowsocks/shadowaead"
-	obfs "github.com/metacubex/mihomo/transport/simple-obfs"
-	"github.com/metacubex/mihomo/transport/snell"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	N "github.com/TokenPLS/Hako/common/net"
+	"github.com/TokenPLS/Hako/common/utils"
+	C "github.com/TokenPLS/Hako/constant"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/listener/jls"
+	"github.com/TokenPLS/Hako/listener/restls"
+	"github.com/TokenPLS/Hako/listener/shadowtls"
+	"github.com/TokenPLS/Hako/transport/shadowsocks/shadowaead"
+	obfs "github.com/TokenPLS/Hako/transport/simple-obfs"
+	"github.com/TokenPLS/Hako/transport/snell"
 )
 
 const maxPacketLength = 0x3fff

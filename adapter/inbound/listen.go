@@ -7,10 +7,10 @@ import (
 	"net/netip"
 	"syscall"
 
-	"github.com/metacubex/mihomo/common/atomic"
-	"github.com/metacubex/mihomo/common/sockopt"
-	"github.com/metacubex/mihomo/component/keepalive"
-	"github.com/metacubex/mihomo/component/mptcp"
+	"github.com/TokenPLS/Hako/common/atomic"
+	"github.com/TokenPLS/Hako/common/sockopt"
+	"github.com/TokenPLS/Hako/component/keepalive"
+	"github.com/TokenPLS/Hako/component/mptcp"
 
 	"github.com/metacubex/tfo-go"
 )
@@ -18,6 +18,19 @@ import (
 var (
 	globalTFO   = atomic.NewBool(false)
 	globalMPTCP = atomic.NewBool(false)
+)
+
+// DefaultListenerHook and DefaultListenerWrapper are the inbound counterparts
+// of dialer.DefaultSocketHook: nil by default, changing nothing, installed by
+// the Apple bind layer where the Network Extension's socket interface scope
+// makes an untouched listener structurally deaf to loopback traffic. The hook
+// runs in every listener socket's Control chain (Listen and ListenPacket
+// both); the wrapper runs after a successful TCP Listen and may replace the
+// listener, with relisten building any companion through the same
+// configuration path — hook included — as the primary.
+var (
+	DefaultListenerHook    func(network, address string, conn syscall.RawConn) error
+	DefaultListenerWrapper func(network, address string, primary net.Listener, relisten func(context.Context, string, string) (net.Listener, error)) (net.Listener, error)
 )
 
 func SetTfo(open bool) {
@@ -59,6 +72,9 @@ func (l ListenConfig) newListenConfig() *tfo.ListenConfig {
 				return err
 			}
 		}
+		if hook := DefaultListenerHook; hook != nil {
+			return hook(network, address, c)
+		}
 		return nil
 	}
 	return &lc
@@ -69,7 +85,16 @@ func (l ListenConfig) Listen(ctx context.Context, network, address string) (net.
 	if err != nil {
 		return nil, err
 	}
-	return l.newListenConfig().Listen(ctx, network, address)
+	listener, err := l.newListenConfig().Listen(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	if wrapper := DefaultListenerWrapper; wrapper != nil {
+		return wrapper(network, address, listener, func(ctx context.Context, network, address string) (net.Listener, error) {
+			return l.newListenConfig().Listen(ctx, network, address)
+		})
+	}
+	return listener, nil
 }
 
 func (l ListenConfig) ListenPacket(ctx context.Context, network, address string) (net.PacketConn, error) {

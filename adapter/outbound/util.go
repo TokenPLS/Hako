@@ -7,9 +7,10 @@ import (
 	"net/netip"
 	"strconv"
 
-	"github.com/metacubex/mihomo/component/resolver"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/transport/socks5"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/component/resolver"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/transport/socks5"
 )
 
 func serializesSocksAddr(metadata *C.Metadata) []byte {
@@ -58,6 +59,10 @@ func resolveUDPAddr(ctx context.Context, network, address string, prefer C.DNSPr
 	}
 
 	ip, port = resolver.LookupIP4P(ip, port)
+	ip, err = dialer.TransformPhysicalAddress(network, ip)
+	if err != nil {
+		return nil, err
+	}
 
 	var uint16Port uint16
 	if port, err := strconv.ParseUint(port, 10, 16); err == nil {

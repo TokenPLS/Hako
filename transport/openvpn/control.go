@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/metacubex/mihomo/common/contextutils"
-	"github.com/metacubex/mihomo/common/pool"
+	"github.com/TokenPLS/Hako/common/contextutils"
+	"github.com/TokenPLS/Hako/common/pool"
 )
 
 type PacketIO interface {

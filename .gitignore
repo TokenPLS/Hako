@@ -1,4 +1,4 @@
-# Binaries for programs and plugins
+# Binaries
 *.exe
 *.exe~
 *.dll
@@ -6,23 +6,31 @@
 *.dylib
 bin/*
 
-# Test binary, build with `go test -c`
+# Test binary / coverage
 *.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
 # go mod vendor
 vendor
 
-# GoLand
+# IDE
 .idea/*
-
-# macOS file
-.DS_Store
-
-# test suite
-test/config/cache*
-/output
 .vscode/
 .fleet/
+
+# macOS
+.DS_Store
+
+# test cache
+test/config/cache*
+/output
+
+# gomobile bind artifact (see `make lib_apple`)
+/Hako.xcframework/
+
+# Release packaging output
+/dist/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

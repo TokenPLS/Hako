@@ -3,8 +3,8 @@ package config
 import (
 	"encoding/json"
 
-	"github.com/metacubex/mihomo/listener/reality"
-	"github.com/metacubex/mihomo/listener/sing"
+	"github.com/TokenPLS/Hako/listener/reality"
+	"github.com/TokenPLS/Hako/listener/sing"
 )
 
 type TrojanUser struct {

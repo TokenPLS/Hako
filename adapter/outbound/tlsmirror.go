@@ -1,6 +1,6 @@
 package outbound
 
-import "github.com/metacubex/mihomo/transport/tlsmirror"
+import "github.com/TokenPLS/Hako/transport/tlsmirror"
 
 type TLSMirrorOptions struct {
 	PrimaryKey                    string                         `proxy:"primary-key,omitempty"`

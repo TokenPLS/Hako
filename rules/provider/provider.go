@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/metacubex/mihomo/common/pool"
-	"github.com/metacubex/mihomo/common/yaml"
-	"github.com/metacubex/mihomo/component/resource"
-	C "github.com/metacubex/mihomo/constant"
-	P "github.com/metacubex/mihomo/constant/provider"
-	"github.com/metacubex/mihomo/rules/common"
+	"github.com/TokenPLS/Hako/common/pool"
+	"github.com/TokenPLS/Hako/common/yaml"
+	"github.com/TokenPLS/Hako/component/resource"
+	C "github.com/TokenPLS/Hako/constant"
+	P "github.com/TokenPLS/Hako/constant/provider"
+	"github.com/TokenPLS/Hako/rules/common"
 )
 
 var tunnel P.Tunnel
@@ -96,6 +96,18 @@ type RuleSetProvider struct {
 
 func (rp *ruleSetProvider) Initial() error {
 	_, err := rp.Fetcher.Initial()
+	return err
+}
+
+// Format is the rule format this provider parses its payload with.
+func (rp *ruleSetProvider) Format() P.RuleFormat {
+	return rp.format
+}
+
+// SideUpdate feeds a payload obtained elsewhere (the app fetched it through the
+// tunnel) into the live provider: parsed, written to the vehicle path, applied.
+func (rp *ruleSetProvider) SideUpdate(payload []byte) error {
+	_, _, err := rp.Fetcher.SideUpdate(payload)
 	return err
 }
 

@@ -4,18 +4,18 @@ import (
 	"net/netip"
 	"path/filepath"
 
-	"github.com/metacubex/mihomo/adapter/inbound"
-	"github.com/metacubex/mihomo/component/dialer"
-	"github.com/metacubex/mihomo/component/process"
-	"github.com/metacubex/mihomo/component/resolver"
-	"github.com/metacubex/mihomo/component/updater"
-	"github.com/metacubex/mihomo/config"
-	C "github.com/metacubex/mihomo/constant"
-	"github.com/metacubex/mihomo/hub/executor"
-	"github.com/metacubex/mihomo/listener"
-	LC "github.com/metacubex/mihomo/listener/config"
-	"github.com/metacubex/mihomo/log"
-	"github.com/metacubex/mihomo/tunnel"
+	"github.com/TokenPLS/Hako/adapter/inbound"
+	"github.com/TokenPLS/Hako/component/dialer"
+	"github.com/TokenPLS/Hako/component/process"
+	"github.com/TokenPLS/Hako/component/resolver"
+	"github.com/TokenPLS/Hako/component/updater"
+	"github.com/TokenPLS/Hako/config"
+	C "github.com/TokenPLS/Hako/constant"
+	"github.com/TokenPLS/Hako/hub/executor"
+	"github.com/TokenPLS/Hako/listener"
+	LC "github.com/TokenPLS/Hako/listener/config"
+	"github.com/TokenPLS/Hako/log"
+	"github.com/TokenPLS/Hako/tunnel"
 
 	"github.com/metacubex/chi"
 	"github.com/metacubex/chi/render"
@@ -25,11 +25,27 @@ import (
 func configRouter() http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", getConfigs)
-	if !embedMode { // disallow update/patch configs in embed mode
-		r.Put("/", updateConfigs)
-		r.Post("/geo", updateGeoDatabases)
-		r.Patch("/", patchConfigs)
+	// PATCH is deliberately OUTSIDE the embed gate, and the split is the point. One condition
+	// used to cover all three, with a comment giving the reasons for the other two: PUT replaces
+	// the running configuration and so bypasses the immutable revision pipeline, POST /geo
+	// downloads inside the extension. Neither is true of PATCH -- it writes no file and
+	// fetches nothing; it flips runtime switches.
+	//
+	// The cost of the shared condition was concrete: switching between rule/global/direct is the
+	// most ordinary thing a Clash dashboard does, and it answered 405 on a device.
+	//
+	// PATCH's ReCreate* calls are not a rebuild when nothing changed. ReCreateTun returns at
+	// `if tunConf.Equal(LastTunConf)` (listener/listener.go:515) and the port listeners short
+	// out the same way, so a body of {"mode":"global"} reaches tunnel.SetMode and nothing else.
+	if !embedMode {
+		r.Put("/", updateConfigs) // replaces the configuration: revision pipeline
 	}
+	// Same handler, same measurement, same switch as /upgrade/geo -- so the two cannot drift into
+	// disagreeing about whether this core may fetch geo data.
+	if !embedMode || geoUpdaterAllowed {
+		r.Post("/geo", updateGeoDatabases)
+	}
+	r.Patch("/", patchConfigs)
 	return r
 }
 

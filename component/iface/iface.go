@@ -6,8 +6,8 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/metacubex/mihomo/common/singledo"
-	"github.com/metacubex/mihomo/component/iface/anet"
+	"github.com/TokenPLS/Hako/common/singledo"
+	"github.com/TokenPLS/Hako/component/iface/anet"
 
 	"github.com/metacubex/bart"
 )

@@ -4,8 +4,8 @@ import (
 	"net"
 	"sync"
 
-	"github.com/metacubex/mihomo/common/buf"
-	"github.com/metacubex/mihomo/common/once"
+	"github.com/TokenPLS/Hako/common/buf"
+	"github.com/TokenPLS/Hako/common/once"
 )
 
 type earlyConn struct {

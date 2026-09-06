@@ -59,6 +59,7 @@ func findProcessName(network string, ip netip.Addr, port int) (uint32, string, e
 	}
 
 	var fallbackUDPProcess string
+	var fallbackUDPUid uint32
 	// skip the first xinpgen(24 bytes) block
 	for i := 24; i+itemSize <= len(buf); i += itemSize {
 		// offset of xinpcb_n and xsocket_n
@@ -90,20 +91,29 @@ func findProcessName(network string, ip netip.Addr, port int) (uint32, string, e
 		srcIP = srcIP.Unmap()
 
 		if ip == srcIP {
-			// xsocket_n.so_last_pid
+			// xsocket_n.so_uid then xsocket_n.so_last_pid, adjacent fields at the same base.
+			//
+			// The uid was returned as a hardcoded 0 here for as long as this file existed, which
+			// silently broke every UID rule on darwin: a rule for uid 0 matched everything and a
+			// rule for any real uid matched nothing. sing-box reads it at so+64
+			// (searcher_darwin_shared.go, darwinXsocketUID) and reads the pid at so+68 exactly as
+			// this code already does, so the two implementations agree on the struct layout and
+			// the neighbouring field is the cross-check.
+			uid := readNativeUint32(buf[so+64 : so+68])
 			pid := readNativeUint32(buf[so+68 : so+72])
 			pp, err := getExecPathFromPID(pid)
-			return 0, pp, err
+			return uid, pp, err
 		}
 
 		// udp packet connection may be not equal with srcIP
 		if network == UDP && srcIP.IsUnspecified() && isIPv4 == srcIsIPv4 {
+			fallbackUDPUid = readNativeUint32(buf[so+64 : so+68])
 			fallbackUDPProcess, _ = getExecPathFromPID(readNativeUint32(buf[so+68 : so+72]))
 		}
 	}
 
 	if network == UDP && fallbackUDPProcess != "" {
-		return 0, fallbackUDPProcess, nil
+		return fallbackUDPUid, fallbackUDPProcess, nil
 	}
 
 	return 0, "", ErrNotFound

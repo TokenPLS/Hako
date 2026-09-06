@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net"
 
-	N "github.com/metacubex/mihomo/common/net"
-	C "github.com/metacubex/mihomo/constant"
+	N "github.com/TokenPLS/Hako/common/net"
+	C "github.com/TokenPLS/Hako/constant"
 )
 
 var tunnel C.Tunnel

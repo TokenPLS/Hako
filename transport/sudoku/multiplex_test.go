@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/metacubex/mihomo/transport/sudoku/multiplex"
-	sudokuobfs "github.com/metacubex/mihomo/transport/sudoku/obfs/sudoku"
+	"github.com/TokenPLS/Hako/transport/sudoku/multiplex"
+	sudokuobfs "github.com/TokenPLS/Hako/transport/sudoku/obfs/sudoku"
 )
 
 func TestUserHash_StableAcrossTableRotation(t *testing.T) {

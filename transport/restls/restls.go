@@ -4,8 +4,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/metacubex/mihomo/component/ca"
-	"github.com/metacubex/mihomo/ntp"
+	"github.com/TokenPLS/Hako/component/ca"
+	"github.com/TokenPLS/Hako/ntp"
 
 	tls "github.com/metacubex/restls-client-go"
 )
