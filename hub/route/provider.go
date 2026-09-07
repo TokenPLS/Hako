@@ -121,7 +121,7 @@ func ruleProviderRouter() http.Handler {
 }
 
 func getRuleProviders(w http.ResponseWriter, r *http.Request) {
-	ruleProviders := tunnel.RuleProviders()
+	ruleProviders := tunnel.SnapshotRuleProviders()
 	render.JSON(w, r, render.M{
 		"providers": ruleProviders,
 	})
@@ -148,7 +148,7 @@ func parseRuleProviderName(next http.Handler) http.Handler {
 func findRuleProviderByName(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		name := r.Context().Value(CtxKeyProviderName).(string)
-		providers := tunnel.RuleProviders()
+		providers := tunnel.SnapshotRuleProviders()
 		provider, exist := providers[name]
 		if !exist {
 			render.Status(r, http.StatusNotFound)

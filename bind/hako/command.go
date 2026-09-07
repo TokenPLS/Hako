@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"sync"
 
+	P "github.com/TokenPLS/Hako/constant/provider"
 	"github.com/TokenPLS/Hako/tunnel"
 	"github.com/TokenPLS/Hako/tunnel/statistic"
 )
@@ -49,6 +50,43 @@ func ConnectionsJSON() string {
 // proxy's MarshalJSON.
 func ProxiesJSON() string {
 	return bridgeSafeString(mustJSON(map[string]any{"proxies": tunnel.Proxies()}))
+}
+
+// RuleProvidersJSON reports live rule-provider metadata and loaded cache checksums.
+// MD5 checksums test payload consistency, not authenticity. This is an on-demand
+// in-process query; it does not require a socket controller or read cache files.
+func RuleProvidersJSON() string {
+	return bridgeSafeString(mustJSON(ruleProvidersCatalog(tunnel.SnapshotRuleProviders())))
+}
+
+func ruleProvidersCatalog(providers map[string]P.RuleProvider) map[string]any {
+	rows := make(map[string]any, len(providers))
+	for name, provider := range providers {
+		if provider == nil {
+			continue
+		}
+		var data []byte
+		var err error
+		if cached, ok := provider.(interface{ LoadedMetadataJSON() ([]byte, error) }); ok {
+			data, err = cached.LoadedMetadataJSON()
+		} else {
+			data, err = json.Marshal(provider)
+		}
+		if err != nil {
+			continue
+		}
+		var row map[string]any
+		if json.Unmarshal(data, &row) != nil || row == nil {
+			continue
+		}
+		// Inline payloads have no cache file identity.
+		if provider.VehicleType() == P.Inline {
+			row["loaded"] = true
+			delete(row, "payload")
+		}
+		rows[name] = row
+	}
+	return map[string]any{"providers": rows}
 }
 
 // ringBuffer keeps the last N log lines for the RecentLogsJSON getter

@@ -56,6 +56,14 @@ func TestCommandGettersReturnJSON(t *testing.T) {
 		t.Fatal("connections key missing")
 	}
 
+	var ruleProviders map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(RuleProvidersJSON()), &ruleProviders); err != nil {
+		t.Fatalf("RuleProvidersJSON invalid: %v", err)
+	}
+	if _, ok := ruleProviders["providers"]; !ok {
+		t.Fatal("rule providers key missing")
+	}
+
 	// Proxies includes the config's "probe" proxy.
 	var proxies struct {
 		Proxies map[string]json.RawMessage `json:"proxies"`

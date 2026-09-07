@@ -7,6 +7,7 @@ import (
 	"io"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TokenPLS/Hako/common/pool"
@@ -116,17 +117,33 @@ func (rp *ruleSetProvider) Update() error {
 	return err
 }
 
+// metadataSnapshot pairs the derived strategy with its loaded cache generation.
+func (rp *ruleSetProvider) metadataSnapshot() (metadata providerForApi, hash string) {
+	rp.ReadLoadedContent(func(loadedHash string, updatedAt time.Time) {
+		metadata = providerForApi{
+			Behavior: rp.behavior.String(), Format: rp.format.String(), Name: rp.Name(),
+			RuleCount: rp.strategy.Count(), Type: rp.Type().String(),
+			UpdatedAt: updatedAt, VehicleType: rp.VehicleType().String(),
+		}
+		hash = loadedHash
+	})
+	return
+}
+
+// LoadedMetadataJSON snapshots cache identity and derived rule metadata together.
+func (rp *ruleSetProvider) LoadedMetadataJSON() ([]byte, error) {
+	metadata, hash := rp.metadataSnapshot()
+	return json.Marshal(struct {
+		providerForApi
+		Loaded      bool   `json:"loaded"`
+		ContentHash string `json:"contentHash"`
+		Algorithm   string `json:"algorithm"`
+	}{providerForApi: metadata, Loaded: hash != "", ContentHash: hash, Algorithm: "md5"})
+}
+
 func (rp *ruleSetProvider) MarshalJSON() ([]byte, error) {
-	return json.Marshal(
-		providerForApi{
-			Behavior:    rp.behavior.String(),
-			Format:      rp.format.String(),
-			Name:        rp.Fetcher.Name(),
-			RuleCount:   rp.strategy.Count(),
-			Type:        rp.Type().String(),
-			UpdatedAt:   rp.UpdatedAt(),
-			VehicleType: rp.VehicleType().String(),
-		})
+	metadata, _ := rp.metadataSnapshot()
+	return json.Marshal(metadata)
 }
 
 func (rp *RuleSetProvider) Close() error {
@@ -296,6 +313,7 @@ type InlineProvider struct {
 type inlineProvider struct {
 	baseProvider
 	name     string
+	updateMu sync.RWMutex
 	updateAt time.Time
 	payload  []string
 }
@@ -310,12 +328,31 @@ func (i *inlineProvider) Initial() error {
 
 func (i *inlineProvider) Update() error {
 	// make api update happy
+	i.updateMu.Lock()
 	i.updateAt = time.Now()
+	i.updateMu.Unlock()
 	return nil
+}
+
+func (i *inlineProvider) updatedAtSnapshot() time.Time {
+	i.updateMu.RLock()
+	defer i.updateMu.RUnlock()
+	return i.updateAt
 }
 
 func (i *inlineProvider) VehicleType() P.VehicleType {
 	return P.Inline
+}
+
+// LoadedMetadataJSON avoids serializing the immutable inline payload for status.
+func (i *inlineProvider) LoadedMetadataJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		providerForApi
+		Loaded bool `json:"loaded"`
+	}{providerForApi: providerForApi{
+		Behavior: i.behavior.String(), Name: i.Name(), RuleCount: i.strategy.Count(),
+		Type: i.Type().String(), VehicleType: i.VehicleType().String(), UpdatedAt: i.updatedAtSnapshot(),
+	}, Loaded: true})
 }
 
 func (i *inlineProvider) MarshalJSON() ([]byte, error) {
@@ -326,7 +363,7 @@ func (i *inlineProvider) MarshalJSON() ([]byte, error) {
 			RuleCount:   i.strategy.Count(),
 			Type:        i.Type().String(),
 			VehicleType: i.VehicleType().String(),
-			UpdatedAt:   i.updateAt,
+			UpdatedAt:   i.updatedAtSnapshot(),
 			Payload:     i.payload,
 		})
 }
