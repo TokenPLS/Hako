@@ -106,9 +106,9 @@ func TestEveryOutcomePhaseHasAFailingCounterpart(t *testing.T) {
 func TestARefusalReachesThePhaseLog(t *testing.T) {
 	setupConfigPipelineTest(t)
 	phaseLog := filepath.Join(t.TempDir(), "phases.log")
-	previous := setupStartupPhaseLogPath
-	setupStartupPhaseLogPath = phaseLog
-	t.Cleanup(func() { setupStartupPhaseLogPath = previous })
+	previous := startupPhaseLogPath()
+	configureStartupPhaseLogPath(phaseLog)
+	t.Cleanup(func() { configureStartupPhaseLogPath(previous) })
 
 	service, err := NewService(newRecordingPlatform())
 	if err != nil {

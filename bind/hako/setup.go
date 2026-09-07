@@ -295,10 +295,11 @@ func Setup(options *SetupOptions) error {
 	// Path wiring — BEFORE any C.Path consumer runs.
 	C.SetHomeDir(options.WorkingPath)
 	C.SetConfig(filepath.Join(options.WorkingPath, "config.yaml"))
-	setupStartupPhaseLogPath = options.StartupPhaseLogPath
-	if setupStartupPhaseLogPath == "" {
-		setupStartupPhaseLogPath = filepath.Join(options.WorkingPath, "hako-core-phases.log")
+	phaseLogPath := options.StartupPhaseLogPath
+	if phaseLogPath == "" {
+		phaseLogPath = filepath.Join(options.WorkingPath, "hako-core-phases.log")
 	}
+	configureStartupPhaseLogPath(phaseLogPath)
 	setupClashAPIPath = filepath.Join(options.BasePath, clashAPISocketName)
 	setupOOMEvidencePath = filepath.Join(options.BasePath, oomEvidenceFileName)
 	setupGoCrashReportBasePath = options.BasePath

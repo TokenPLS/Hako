@@ -2,6 +2,7 @@ package hako
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -28,7 +29,10 @@ var startupPhaseFailure string
 // is empty, if it is. Read through the sampler's curve, which is the one
 // channel already proven to reach a cable from this process.
 func StartupPhaseDiagnostic() string {
-	return bridgeSafeString("path=" + setupStartupPhaseLogPath + " err=" + startupPhaseFailure)
+	phaseMu.Lock()
+	diagnostic := "path=" + setupStartupPhaseLogPath + " err=" + startupPhaseFailure
+	phaseMu.Unlock()
+	return bridgeSafeString(diagnostic)
 }
 
 // StartupPhaseTrace returns every stage recorded so far, one per line. The
@@ -122,7 +126,7 @@ func armStartupProbes() func() {
 	// the window, so provider loads run one at a time exactly while a phase log is being
 	// collected -- the same opt-in that makes the lines exist at all.
 	executor.SerializeProviderLoads = func() bool {
-		return setupStartupPhaseLogPath != ""
+		return startupPhaseLogPath() != ""
 	}
 	return func() {
 		startupProbing.Store(false)
@@ -146,8 +150,12 @@ func StartupPhaseTrace() string {
 }
 
 var (
-	phaseMu    sync.Mutex
-	phaseTrace []string
+	phaseMu                 sync.Mutex
+	phaseTrace              []string
+	phaseEpoch              = newStartupPhaseEpoch()
+	phaseLogGeneration      uint64
+	phaseDiagnosticRevision int64
+	phaseFailureSequence    int64
 )
 
 func startupPhase(name string) {
@@ -168,9 +176,10 @@ func startupPhaseWithPeak(name string, peakBytes int64) {
 	}
 	phaseMu.Lock()
 	phaseTrace = append(phaseTrace, line)
-	phaseMu.Unlock()
-
+	sequence := int64(len(phaseTrace))
 	path := setupStartupPhaseLogPath
+	generation := phaseLogGeneration
+	phaseMu.Unlock()
 	if path == "" {
 		return
 	}
@@ -181,9 +190,58 @@ func startupPhaseWithPeak(name string, peakBytes int64) {
 	if err != nil {
 		// Say so where the curve is read. A diagnostic that fails silently
 		// costs a whole device round-trip to notice.
-		startupPhaseFailure = err.Error()
+		recordStartupPhaseFailure(generation, sequence, fmt.Errorf("open: %w", err))
 		return
 	}
-	defer file.Close()
-	_, _ = file.WriteString(stamped)
+	if err := writeStartupPhaseRecord(file, stamped); err != nil {
+		recordStartupPhaseFailure(generation, sequence, err)
+	}
+}
+
+// startupPhaseLogPath shares the diagnostic lock with Setup's path publication.
+func startupPhaseLogPath() string {
+	phaseMu.Lock()
+	defer phaseMu.Unlock()
+	return setupStartupPhaseLogPath
+}
+
+func configureStartupPhaseLogPath(path string) {
+	phaseMu.Lock()
+	defer phaseMu.Unlock()
+	phaseLogGeneration++
+	setupStartupPhaseLogPath = path
+	startupPhaseFailure = ""
+	phaseFailureSequence = 0
+	phaseDiagnosticRevision++
+}
+
+func recordStartupPhaseFailure(generation uint64, sequence int64, err error) {
+	phaseMu.Lock()
+	defer phaseMu.Unlock()
+	if generation != phaseLogGeneration {
+		return
+	}
+	startupPhaseFailure = err.Error()
+	phaseFailureSequence = sequence
+	phaseDiagnosticRevision++
+}
+
+// Always close a successfully opened file, including after a short write.
+// No retry is attempted: partial bytes are diagnostic evidence, not a receipt.
+func writeStartupPhaseRecord(file io.WriteCloser, line string) error {
+	written, err := io.WriteString(file, line)
+	if err == nil && written != len(line) {
+		err = io.ErrShortWrite
+	}
+	closeErr := file.Close()
+	if err != nil {
+		if closeErr != nil {
+			return fmt.Errorf("write: %v; close: %w", err, closeErr)
+		}
+		return fmt.Errorf("write: %w", err)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close: %w", closeErr)
+	}
+	return nil
 }
