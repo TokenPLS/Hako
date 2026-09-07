@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/TokenPLS/Hako/log"
 	"github.com/TokenPLS/Hako/tunnel"
@@ -37,7 +38,14 @@ var dialFailureWatch struct {
 	sync.Mutex
 	consecutive int
 	firstError  string
-	announced   bool
+	// The error itself, not just its sentence. dialFailureAdvice chooses by errno through
+	// errors.Is, and a run is attributed to the failure that started it -- so the advice can
+	// only be stated after the fact if the error is still here to ask. Re-deriving it from
+	// firstError would mean matching on message text, which is the selection key this
+	// repository has already been bitten by twice.
+	firstErr  error
+	firstAt   time.Time
+	announced bool
 }
 
 func init() {
@@ -54,6 +62,8 @@ func observeDialOutcomeForNotice(err error) {
 		// resets too: a tunnel that recovers and later breaks again deserves to be told twice.
 		dialFailureWatch.consecutive = 0
 		dialFailureWatch.firstError = ""
+		dialFailureWatch.firstErr = nil
+		dialFailureWatch.firstAt = time.Time{}
 		dialFailureWatch.announced = false
 		return
 	}
@@ -61,11 +71,15 @@ func observeDialOutcomeForNotice(err error) {
 	reason := err.Error()
 	if dialFailureWatch.consecutive == 0 {
 		dialFailureWatch.firstError = reason
+		dialFailureWatch.firstErr = err
+		dialFailureWatch.firstAt = time.Now()
 	} else if !sameDialFailure(dialFailureWatch.firstError, reason) {
 		// Different failures in a row are what a broken network looks like, not what one broken
 		// permission looks like. Restart the run rather than counting unrelated errors towards a
 		// sentence that would name a single cause.
 		dialFailureWatch.firstError = reason
+		dialFailureWatch.firstErr = err
+		dialFailureWatch.firstAt = time.Now()
 		dialFailureWatch.consecutive = 1
 		return
 	}
@@ -81,6 +95,44 @@ func observeDialOutcomeForNotice(err error) {
 	// they are the only one who can act on the answer.
 	log.Warnln("[Apple] %d outbound connections in a row failed and none succeeded: %s. %s",
 		dialFailureWatch.consecutive, reason, dialFailureAdvice(err))
+}
+
+// DialHealthJSON is the same watch, read instead of listened to.
+//
+// The notice above is a log line, and a log line has no "cleared". One success resets the
+// run (and the announcement, so a tunnel that breaks again is reported again) and says
+// nothing about it -- which is right for a log and wrong for anything that draws a row from
+// it: the row would light on the notice and stay lit for the rest of the session. A caller
+// that can ask "is it wrong now" needs no event to have been caught, and needs no second
+// producer for the recovery.
+//
+// Keys are absent rather than empty when nothing is wrong, so a caller renders on presence:
+//
+//	{"consecutive":0,"announced":false}
+//	{"consecutive":20,"announced":true,"firstError":"...","advice":"...","sinceUnix":1757000000}
+//
+// `consecutive` is reported below the threshold too. What it means there is "three failures
+// just now", which is a real thing to know and a different thing from the announced run --
+// `announced` is what says the core spoke. The threshold is deliberately high
+// (consecutiveDialFailuresBeforeNotice) and the run must be the SAME complaint throughout,
+// so a network failing in assorted ways never reaches it: a caller must not render this as
+// "nothing is getting out", only as "the same thing has failed N times in a row".
+func DialHealthJSON() string {
+	dialFailureWatch.Lock()
+	defer dialFailureWatch.Unlock()
+
+	health := map[string]any{
+		"consecutive": dialFailureWatch.consecutive,
+		"announced":   dialFailureWatch.announced,
+	}
+	if dialFailureWatch.firstErr != nil {
+		health["firstError"] = dialFailureWatch.firstError
+		health["advice"] = dialFailureAdvice(dialFailureWatch.firstErr)
+	}
+	if !dialFailureWatch.firstAt.IsZero() {
+		health["sinceUnix"] = dialFailureWatch.firstAt.Unix()
+	}
+	return bridgeSafeString(mustJSON(health))
 }
 
 // sameDialFailure asks whether two dial errors are the same complaint about different addresses.

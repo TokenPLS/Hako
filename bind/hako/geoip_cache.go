@@ -2,12 +2,14 @@ package hako
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/TokenPLS/Hako/component/geodata"
 	"github.com/TokenPLS/Hako/component/geodata/compiled"
+	"github.com/TokenPLS/Hako/component/mmdb"
 	"github.com/TokenPLS/Hako/config"
 	C "github.com/TokenPLS/Hako/constant"
 	"github.com/TokenPLS/Hako/log"
@@ -264,4 +266,59 @@ func GeodataModeEnabled(content string) bool {
 // "" and does not need the caller to filter.
 func GeoIPCountryLines(content string) string {
 	return bridgeSafeString(strings.Join(GeoIPCountriesIn(content), "\n"))
+}
+
+// GeoIPCountryForIP reports the country an address belongs to, or nil when this core cannot
+// say. It is the read side of the database the GEOIP rules match against; nothing else in
+// this surface turns an address into a place.
+//
+// The judgement it serves: the reader's real egress is in one country and the destination
+// they are proxying to is in another, so traffic is going the long way round. The containing
+// app already knows its egress address; without this it would have to ask a third-party
+// service (a network call, from a client that is diagnosing the network) or open
+// geoip.metadb itself and carry a second reader of a format the core already reads.
+//
+// Setup is enough -- no running core, no tunnel, no network. The database is whichever file
+// C.Path.MMDB() finds in the home directory (constant/path.go: Country.mmdb, geoip.db or
+// geoip.metadb), which on Apple platforms is the copy the app provisions from its bundle.
+//
+// nil covers every "cannot say" there is: not an address, no database seeded, no record for
+// it. They are one shape on purpose -- a caller that had to tell them apart in order to
+// render "unknown" would be carrying a distinction it cannot act on, and a sentinel string
+// would be a value someone eventually compares a country code against. A returned box
+// always carries a code; it is never present and empty.
+//
+// It reads the MMDB, and geodata-mode configurations match GEOIP through the .dat matcher
+// instead (rules/common/geoip.go), which answers "is this address in country X" and has no
+// reverse. In practice those configurations do not provision an MMDB at all
+// (plan_resources.go selects GeoIP.dat for them), so this answers nil there without needing
+// a mode check -- but a caller must not read this as a prediction of what a GEOIP rule will
+// do under geodata-mode.
+//
+// A sing or metaV0 database can hold several codes for one address; the first is reported.
+// A caller that needs "is it in X" should ask that question of a rule, not compare against
+// this.
+//
+// A present answer is not "this address is public": the shipped database answers "private"
+// for RFC1918 space, which is a real record and a real rule (GEOIP,private). Callers that
+// mean "is this address routable" must ask that, not infer it from a country being here.
+func GeoIPCountryForIP(ip string) *StringBox {
+	address, err := netip.ParseAddr(strings.Trim(strings.TrimSpace(ip), "[]"))
+	if err != nil {
+		return nil
+	}
+	// An IPv4 written the v6 way is the same address, and a caller that took it off a socket
+	// may well hold it in that form. Unmapping is what upstream's own resolver does
+	// (component/resolver/resolver.go LookupIPWithResolver) rather than a courtesy invented
+	// here.
+	address = address.Unmap()
+	reader := mmdb.IPInstance()
+	if !reader.Available() {
+		return nil
+	}
+	codes := reader.LookupCode(address.AsSlice())
+	if len(codes) == 0 || codes[0] == "" {
+		return nil
+	}
+	return WrapString(codes[0])
 }

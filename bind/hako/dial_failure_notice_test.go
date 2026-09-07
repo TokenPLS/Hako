@@ -75,12 +75,16 @@ func resetDialFailureWatch(t *testing.T) {
 	dialFailureWatch.Lock()
 	dialFailureWatch.consecutive = 0
 	dialFailureWatch.firstError = ""
+	dialFailureWatch.firstErr = nil
+	dialFailureWatch.firstAt = time.Time{}
 	dialFailureWatch.announced = false
 	dialFailureWatch.Unlock()
 	t.Cleanup(func() {
 		dialFailureWatch.Lock()
 		dialFailureWatch.consecutive = 0
 		dialFailureWatch.firstError = ""
+		dialFailureWatch.firstErr = nil
+		dialFailureWatch.firstAt = time.Time{}
 		dialFailureWatch.announced = false
 		dialFailureWatch.Unlock()
 	})
