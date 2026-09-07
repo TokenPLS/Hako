@@ -10,6 +10,7 @@ import (
 )
 
 func init() {
+	route.SetMemoryFootprintReader(MemoryFootprint)
 	route.Register(func(router chi.Router) {
 		router.Get("/hako/v1/traffic", serveTrafficSnapshot)
 		router.Get("/hako/v1/memory", serveMemorySnapshot)

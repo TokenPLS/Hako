@@ -1,6 +1,8 @@
 package statistic
 
 import (
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -153,5 +155,46 @@ func newTestManager() *Manager {
 		proxyDownloadTotal: atomic.NewInt64(0),
 		lastReadAt:         atomic.NewInt64(0),
 		sampleWake:         make(chan struct{}, 1),
+	}
+}
+
+func TestMemorySamplingAndCachedSnapshotsAreConcurrent(t *testing.T) {
+	manager := newTestManager()
+	manager.pid = int32(os.Getpid())
+	if manager.Memory() == 0 {
+		t.Skip("host RSS sampling unavailable")
+	}
+	start := make(chan struct{})
+	var workers sync.WaitGroup
+	for worker := 0; worker < 8; worker++ {
+		workers.Add(1)
+		go func(sample bool) {
+			defer workers.Done()
+			<-start
+			for n := 0; n < 500; n++ {
+				if sample {
+					manager.Memory()
+				} else {
+					manager.Snapshot()
+				}
+			}
+		}(worker%2 == 0)
+	}
+	close(start)
+	workers.Wait()
+}
+
+func TestMemorySampleIsVisibleInCachedSnapshot(t *testing.T) {
+	manager := newTestManager()
+	manager.pid = int32(os.Getpid())
+	if got := manager.Snapshot().Memory; got != 0 {
+		t.Fatalf("unsampled snapshot = %d", got)
+	}
+	sampled := manager.Memory()
+	if sampled == 0 {
+		t.Skip("host RSS sampling unavailable")
+	}
+	if got := manager.Snapshot().Memory; got != sampled {
+		t.Fatalf("snapshot=%d, last sample=%d", got, sampled)
 	}
 }

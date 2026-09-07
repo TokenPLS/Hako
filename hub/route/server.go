@@ -80,8 +80,36 @@ type Traffic struct {
 }
 
 type Memory struct {
-	Inuse   uint64 `json:"inuse"`
-	OSLimit uint64 `json:"oslimit"` // maybe we need it in the future
+	Inuse     uint64 `json:"inuse"`
+	OSLimit   uint64 `json:"oslimit"` // maybe we need it in the future
+	Footprint *int64 `json:"footprint,omitempty"`
+}
+
+var memoryFootprintMu sync.RWMutex
+var memoryFootprintReader func() int64
+
+// SetMemoryFootprintReader optionally adds the current process's physical
+// footprint to the native memory stream. A nil reader preserves the upstream
+// shape; a registered reader reports zero when no reading is available.
+func SetMemoryFootprintReader(reader func() int64) {
+	memoryFootprintMu.Lock()
+	memoryFootprintReader = reader
+	memoryFootprintMu.Unlock()
+}
+
+func currentMemoryFootprint() *int64 {
+	memoryFootprintMu.RLock()
+	reader := memoryFootprintReader
+	memoryFootprintMu.RUnlock()
+	if reader == nil {
+		return nil
+	}
+	// Do not hold registration's lock while sampling process state.
+	value := reader()
+	if value < 0 {
+		value = 0
+	}
+	return &value
 }
 
 type Config struct {
@@ -524,8 +552,9 @@ func memory(w http.ResponseWriter, r *http.Request) {
 			first = false
 		}
 		if err := json.NewEncoder(buf).Encode(Memory{
-			Inuse:   inuse,
-			OSLimit: 0,
+			Inuse:     inuse,
+			OSLimit:   0,
+			Footprint: currentMemoryFootprint(),
 		}); err != nil {
 			break
 		}

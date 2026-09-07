@@ -56,7 +56,7 @@ type Manager struct {
 	active              atomic.Int64
 	rejected            atomic.Int64
 	pid                 int32
-	memory              uint64
+	memory              atomic.Uint64
 
 	// lastReadAt is when a caller last asked for a rate, as Unix nanoseconds. The sampler
 	// stops when nobody has asked recently and the next read wakes it. See handle().
@@ -243,7 +243,7 @@ func (m *Manager) TotalTraffic(onlyProxy bool) (up, down int64) {
 
 func (m *Manager) Memory() uint64 {
 	m.updateMemory()
-	return m.memory
+	return m.memory.Load()
 }
 
 func (m *Manager) Snapshot() *Snapshot {
@@ -256,7 +256,7 @@ func (m *Manager) Snapshot() *Snapshot {
 		UploadTotal:   m.uploadTotal.Load(),
 		DownloadTotal: m.downloadTotal.Load(),
 		Connections:   connections,
-		Memory:        m.memory,
+		Memory:        m.memory.Load(),
 	}
 }
 
@@ -265,7 +265,7 @@ func (m *Manager) updateMemory() {
 	if err != nil {
 		return
 	}
-	m.memory = stat.RSS
+	m.memory.Store(stat.RSS)
 }
 
 func (m *Manager) ResetStatistic() {
