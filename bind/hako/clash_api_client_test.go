@@ -1,6 +1,7 @@
 package hako
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"os"
@@ -375,7 +376,7 @@ func TestClashAPIClientRequestsProxyOnlyTrafficWithoutChangingOtherStreams(t *te
 		t.Fatal(err)
 	}
 
-	specs, err := client.streamSpecs()
+	specs, err := client.streamSpecs(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +396,7 @@ func TestClashAPIClientRequestsProxyOnlyTrafficWithoutChangingOtherStreams(t *te
 	}
 
 	options.OnlyStatisticsProxy = false
-	defaultSpecs, err := client.streamSpecs()
+	defaultSpecs, err := client.streamSpecs(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

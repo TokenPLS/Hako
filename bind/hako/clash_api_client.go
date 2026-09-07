@@ -90,11 +90,17 @@ type clashAPIStream struct {
 }
 
 type clashAPISession struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
+	ctx    context.Context
+	cancel context.CancelFunc
+	// All mutable session fields are protected by the client's mu. The worker
+	// count includes Connect, re-subscribe dialers, and stream readers.
 	streams   []*clashAPIStream
 	wg        sync.WaitGroup
-	closeOnce sync.Once
+	done      chan struct{}
+	closing   bool
+	connected bool
+	ready     bool
+	cause     error
 }
 
 // ClashAPIClient is the app-process command client for mihomo's native API.
@@ -180,56 +186,106 @@ func (c *ClashAPIClient) Connect() error {
 	c.mu.Lock()
 	if c.session != nil {
 		c.mu.Unlock()
-		return bridgeSafeError(errors.New("hako: Clash API client already connected"))
+		return bridgeSafeError(errors.New("hako: Clash API client already connecting, connected, or closing"))
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	session := &clashAPISession{ctx: ctx, cancel: cancel}
-	c.mu.Unlock()
-
-	streamSpecs, err := c.streamSpecs()
-	if err != nil {
-		cancel()
-		return bridgeSafeError(err)
-	}
-	if len(streamSpecs) == 0 {
-		if err := c.probeWithRetry(ctx); err != nil {
-			cancel()
-			return bridgeSafeError(err)
-		}
-	}
-	for _, spec := range streamSpecs {
-		conn, err := c.dialWebSocketWithRetry(ctx, spec.path)
-		if err != nil {
-			cancel()
-			for _, stream := range session.streams {
-				stream.conn.CloseNow()
-			}
-			return bridgeSafeError(err)
-		}
-		conn.SetReadLimit(clashAPIMaxMessageSize)
-		session.streams = append(session.streams, &clashAPIStream{
-			path: spec.path, write: spec.write, conn: conn, client: c,
-		})
-	}
-
-	c.mu.Lock()
-	if c.session != nil {
-		c.mu.Unlock()
-		cancel()
-		for _, stream := range session.streams {
-			stream.conn.CloseNow()
-		}
-		return bridgeSafeError(errors.New("hako: Clash API client connected concurrently"))
-	}
+	session := &clashAPISession{ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	// Register the establishing worker before Close can find this attempt.
+	session.wg.Add(1)
 	c.session = session
 	c.mu.Unlock()
 
+	go c.completeSession(session)
+	err := c.connectSession(session)
+	if err != nil {
+		c.finish(session, err)
+	}
+	session.wg.Done()
+	if err != nil {
+		// A failed attempt has no remaining ownership when Connect returns, so
+		// callers can explicitly retry the same reusable client.
+		<-session.done
+	}
+	return bridgeSafeError(err)
+}
+
+func (c *ClashAPIClient) connectSession(session *clashAPISession) error {
+	streamSpecs, err := c.streamSpecs(session.ctx)
+	if err != nil {
+		return err
+	}
+	if len(streamSpecs) == 0 {
+		if err := c.probeWithRetry(session.ctx); err != nil {
+			return err
+		}
+	}
+	for _, spec := range streamSpecs {
+		conn, err := c.dialWebSocketWithRetry(session.ctx, spec.path)
+		if err != nil {
+			return err
+		}
+		conn.SetReadLimit(clashAPIMaxMessageSize)
+		c.mu.Lock()
+		if session.closing {
+			c.mu.Unlock()
+			conn.CloseNow()
+			return session.ctx.Err()
+		}
+		session.streams = append(session.streams, &clashAPIStream{
+			path: spec.path, write: spec.write, conn: conn, client: c,
+		})
+		c.mu.Unlock()
+	}
+
+	c.mu.Lock()
+	if session.closing {
+		c.mu.Unlock()
+		return session.ctx.Err()
+	}
+	// This is the success/Close ordering point. Close that loses this race
+	// still waits for Connected and any readers before it returns.
+	session.connected = true
+	c.mu.Unlock()
 	c.handler.Connected()
-	for _, stream := range session.streams {
-		session.wg.Add(1)
+
+	c.mu.Lock()
+	if session.closing {
+		c.mu.Unlock()
+		return session.ctx.Err()
+	}
+	session.ready = true
+	streams := append([]*clashAPIStream(nil), session.streams...)
+	session.wg.Add(len(streams))
+	c.mu.Unlock()
+	for _, stream := range streams {
 		go stream.read(session)
 	}
 	return nil
+}
+
+// completeSession runs once per attempt, without a polling timer. Keep the
+// attempt discoverable through callback completion so concurrent Close calls
+// all observe the same drain barrier. Handlers must enqueue asynchronous
+// owner actions, never synchronously wait on Close from their own callback.
+func (c *ClashAPIClient) completeSession(session *clashAPISession) {
+	<-session.ctx.Done()
+	session.wg.Wait()
+	c.mu.Lock()
+	connected, cause := session.connected, session.cause
+	c.mu.Unlock()
+	if connected {
+		message := ""
+		if cause != nil {
+			message = cause.Error()
+		}
+		c.handler.Disconnected(message)
+	}
+	c.mu.Lock()
+	if c.session == session {
+		c.session = nil
+	}
+	close(session.done)
+	c.mu.Unlock()
 }
 
 type clashAPIStreamSpec struct {
@@ -237,7 +293,7 @@ type clashAPIStreamSpec struct {
 	write func(string)
 }
 
-func (c *ClashAPIClient) streamSpecs() ([]clashAPIStreamSpec, error) {
+func (c *ClashAPIClient) streamSpecs(ctx context.Context) ([]clashAPIStreamSpec, error) {
 	var specs []clashAPIStreamSpec
 	seen := make(map[int32]bool)
 	for _, command := range c.options.commands {
@@ -266,7 +322,7 @@ func (c *ClashAPIClient) streamSpecs() ([]clashAPIStreamSpec, error) {
 					path:  trafficStreamPath(c.onlyStatisticsProxy.Load()),
 					write: c.handler.WriteTraffic,
 				},
-				clashAPIStreamSpec{path: "/memory", write: c.enrichMemoryFrames(c.handler.WriteMemory)},
+				clashAPIStreamSpec{path: "/memory", write: c.enrichMemoryFrames(ctx, c.handler.WriteMemory)},
 			)
 		case CommandMode:
 			specs = append(specs, clashAPIStreamSpec{
@@ -318,8 +374,6 @@ func trafficStreamPath(onlyProxy bool) string {
 // not record the new scope either — asking again retries instead of reporting
 // the no-op of a value that was never reached.
 func (c *ClashAPIClient) SetOnlyStatisticsProxy(enabled bool) error {
-	// Serialised, so two callers cannot both find the value different and
-	// both dial. The no-op check has to be inside it for the same reason.
 	c.scopeMu.Lock()
 	defer c.scopeMu.Unlock()
 	if c.onlyStatisticsProxy.Load() == enabled {
@@ -328,6 +382,10 @@ func (c *ClashAPIClient) SetOnlyStatisticsProxy(enabled bool) error {
 
 	c.mu.Lock()
 	session := c.session
+	if session != nil && (!session.ready || session.closing) {
+		c.mu.Unlock()
+		return bridgeSafeError(errors.New("hako: control session is connecting or closing"))
+	}
 	var current *clashAPIStream
 	if session != nil {
 		for _, stream := range session.streams {
@@ -337,14 +395,17 @@ func (c *ClashAPIClient) SetOnlyStatisticsProxy(enabled bool) error {
 			}
 		}
 	}
-	c.mu.Unlock()
-
-	// Nothing live to re-subscribe: record it and let Connect dial the right
-	// path. A client that never asked for CommandStatus lands here too.
-	if session == nil || current == nil {
+	if current == nil {
+		// Serialise this update with publishing the next connecting attempt.
 		c.onlyStatisticsProxy.Store(enabled)
+		c.mu.Unlock()
 		return nil
 	}
+	// The dialer itself is owned before Close can cancel the session. Its
+	// replacement reader will be registered under the same mutex.
+	session.wg.Add(1)
+	c.mu.Unlock()
+	defer session.wg.Done()
 
 	path := trafficStreamPath(enabled)
 	conn, err := c.dialWebSocketWithRetry(session.ctx, path)
@@ -352,13 +413,8 @@ func (c *ClashAPIClient) SetOnlyStatisticsProxy(enabled bool) error {
 		return bridgeSafeError(fmt.Errorf("hako: re-subscribe %s: %w", path, err))
 	}
 	conn.SetReadLimit(clashAPIMaxMessageSize)
-
 	c.mu.Lock()
-	// The session is the token. Dialling happens off the lock, and in that
-	// window the session can end or be replaced; adopting the new connection
-	// into a session that is no longer current would leave a reader nobody
-	// closes.
-	if c.session != session {
+	if c.session != session || session.closing {
 		c.mu.Unlock()
 		conn.CloseNow()
 		return bridgeSafeError(errors.New("hako: control session changed while re-subscribing traffic"))
@@ -375,17 +431,12 @@ func (c *ClashAPIClient) SetOnlyStatisticsProxy(enabled bool) error {
 		conn.CloseNow()
 		return bridgeSafeError(errors.New("hako: traffic stream disappeared while re-subscribing"))
 	}
-	replacement := &clashAPIStream{
-		path: path, write: current.write, conn: conn, client: c,
-	}
+	replacement := &clashAPIStream{path: path, write: current.write, conn: conn, client: c}
 	session.streams[index] = replacement
-	// Marked before the close, so the old read loop reads the flag rather
-	// than racing it and reporting a teardown that never happened.
 	current.retired.Store(true)
 	c.onlyStatisticsProxy.Store(enabled)
 	session.wg.Add(1)
 	c.mu.Unlock()
-
 	current.conn.CloseNow()
 	go replacement.read(session)
 	return nil
@@ -456,30 +507,39 @@ func (s *clashAPIStream) read(session *clashAPISession) {
 			s.client.finish(session, fmt.Errorf("%s stream returned invalid JSON text", s.path))
 			return
 		}
+		if session.ctx.Err() != nil {
+			return
+		}
 		s.write(string(payload))
 	}
 }
 
 func (c *ClashAPIClient) finish(session *clashAPISession, cause error) {
-	session.closeOnce.Do(func() {
-		session.cancel()
-		for _, stream := range session.streams {
-			stream.conn.CloseNow()
-		}
-		c.mu.Lock()
-		if c.session == session {
-			c.session = nil
-		}
+	c.mu.Lock()
+	if session.closing {
 		c.mu.Unlock()
-		message := ""
-		if cause != nil {
-			message = cause.Error()
-		}
-		c.handler.Disconnected(message)
-	})
+		return
+	}
+	// Own the physical close loop before cancellation wakes the drainer.
+	// Partial streams have no reader to close them or wait on our behalf.
+	session.wg.Add(1)
+	defer session.wg.Done()
+	session.closing = true
+	session.cause = cause
+	streams := append([]*clashAPIStream(nil), session.streams...)
+	session.cancel()
+	c.mu.Unlock()
+	// No client lock is held while closing network connections.
+	for _, stream := range streams {
+		stream.conn.CloseNow()
+	}
 }
 
-// Close synchronously cancels every stream. It is idempotent.
+// Close cancels and drains the current attempt, including Connect and pending
+// re-subscribe dialers. It is idempotent and the client remains reusable.
+// Callbacks must request Close asynchronously through their owner; a callback
+// cannot synchronously wait for its own completion. A future Connect call
+// that has not entered Go is the caller's task-ownership responsibility.
 func (c *ClashAPIClient) Close() {
 	c.mu.Lock()
 	session := c.session
@@ -488,7 +548,7 @@ func (c *ClashAPIClient) Close() {
 		return
 	}
 	c.finish(session, nil)
-	session.wg.Wait()
+	<-session.done
 }
 
 func (c *ClashAPIClient) request(method, path string, body any) (string, error) {

@@ -2,10 +2,12 @@ package hako
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -66,21 +68,23 @@ func TestProbeAdmissionChargesCountAgainstCeiling(t *testing.T) {
 }
 
 func TestProbeAdmissionWaitsUntilFootprintFalls(t *testing.T) {
-	defer drainProbeAdmissionCharges(t)
-	var calls atomic.Int64
-	cfg := testAdmissionConfig(func() int64 {
-		if calls.Add(1) >= 4 {
-			return 40 << 20
+	synctest.Test(t, func(t *testing.T) {
+		defer drainProbeAdmissionCharges(t)
+		var calls atomic.Int64
+		cfg := testAdmissionConfig(func() int64 {
+			if calls.Add(1) >= 4 {
+				return 40 << 20
+			}
+			return 49 << 20
+		})
+		waited, verdict := probeAdmissionWait(context.Background(), cfg)
+		if waited < cfg.poll {
+			t.Fatal("high water must wait")
 		}
-		return 49 << 20
+		if verdict != probeAdmitted {
+			t.Fatal("falling footprint must admit un-forced")
+		}
 	})
-	waited, verdict := probeAdmissionWait(context.Background(), cfg)
-	if waited < cfg.poll {
-		t.Fatal("high water must wait")
-	}
-	if verdict != probeAdmitted {
-		t.Fatal("falling footprint must admit un-forced")
-	}
 }
 
 func TestProbeAdmissionForcesAfterMaxWait(t *testing.T) {
@@ -99,18 +103,20 @@ func TestProbeAdmissionForcesAfterMaxWait(t *testing.T) {
 	}
 }
 
-func TestProbeAdmissionForcesOnContextDone(t *testing.T) {
-	defer drainProbeAdmissionCharges(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
-	defer cancel()
-	cfg := testAdmissionConfig(func() int64 { return 49 << 20 })
-	_, verdict := probeAdmissionWait(ctx, cfg)
-	if verdict != probeDeferred {
-		t.Fatal("context expiry in the queue must defer — never a recorded fake timeout")
-	}
-	if got := probeAdmissionCharges.Load(); got != 0 {
-		t.Fatalf("a deferred probe must not charge, got %d", got)
-	}
+func TestProbeAdmissionDefersOnContextDone(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		defer drainProbeAdmissionCharges(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
+		defer cancel()
+		cfg := testAdmissionConfig(func() int64 { return 49 << 20 })
+		_, verdict := probeAdmissionWait(ctx, cfg)
+		if verdict != probeDeferred {
+			t.Fatal("context expiry in the queue must defer — never a recorded fake timeout")
+		}
+		if got := probeAdmissionCharges.Load(); got != 0 {
+			t.Fatalf("a deferred probe must not charge, got %d", got)
+		}
+	})
 }
 
 func TestProbeAdmissionSensorUnavailablePassesUncharged(t *testing.T) {
@@ -255,5 +261,65 @@ func TestBackgroundProbeDefersOnContextDeath(t *testing.T) {
 	}
 	if got := probeAdmissionCharges.Load(); got != 0 {
 		t.Fatalf("deferred must not charge, got %d", got)
+	}
+}
+
+func TestProbeAdmissionCancellationWinsBeforeReservation(t *testing.T) {
+	for _, sample := range []int64{-1, 40 << 20, 49 << 20} {
+		t.Run(fmt.Sprint(sample), func(t *testing.T) {
+			defer drainProbeAdmissionCharges(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			var samples, scavenges int
+			beforeForced := probeAdmissionLastForcedNs.Load()
+			cfg := testAdmissionConfig(func() int64 { samples++; return sample })
+			cfg.scavenge = func() { scavenges++ }
+			cfg.maxWait = 0
+			_, verdict := probeAdmissionWait(ctx, cfg)
+			if verdict != probeDeferred {
+				t.Fatalf("cancelled request admitted: sample=%d verdict=%v", sample, verdict)
+			}
+			if got := probeAdmissionCharges.Load(); got != 0 {
+				t.Fatalf("cancelled request charged %d", got)
+			}
+			if samples != 0 || scavenges != 0 || probeAdmissionLastForcedNs.Load() != beforeForced {
+				t.Fatalf("pre-cancelled request performed work: samples=%d scavenges=%d", samples, scavenges)
+			}
+		})
+	}
+}
+
+func TestProbeAdmissionCancellationDuringSensorDefers(t *testing.T) {
+	for _, sample := range []int64{-1, 40 << 20, 49 << 20} {
+		t.Run(fmt.Sprint(sample), func(t *testing.T) {
+			defer drainProbeAdmissionCharges(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			cfg := testAdmissionConfig(func() int64 { cancel(); return sample })
+			cfg.maxWait = 0
+			_, verdict := probeAdmissionWait(ctx, cfg)
+			if verdict != probeDeferred {
+				t.Fatalf("sensor returned after cancellation: sample=%d verdict=%v", sample, verdict)
+			}
+			if got := probeAdmissionCharges.Load(); got != 0 {
+				t.Fatalf("cancelled sensor charged %d", got)
+			}
+		})
+	}
+}
+
+func TestProbeAdmissionCancellationDuringScavengeDefers(t *testing.T) {
+	defer drainProbeAdmissionCharges(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := testAdmissionConfig(func() int64 { return 49 << 20 })
+	cfg.maxWait = 0
+	cfg.scavenge = cancel
+	_, verdict := probeAdmissionWait(ctx, cfg)
+	if verdict != probeDeferred {
+		t.Fatalf("scavenge returned after cancellation: verdict=%v", verdict)
+	}
+	if got := probeAdmissionCharges.Load(); got != 0 {
+		t.Fatalf("cancelled scavenge charged %d", got)
 	}
 }

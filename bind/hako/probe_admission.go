@@ -23,8 +23,8 @@ import (
 // The gate sits on the single choke point every probe shares
 // (adapter.Proxy.urlTest, armed via adapter.SetURLTestAdmission) and paces
 // rather than refuses: a probe above the admit line waits for the scavenger
-// to hand pages back, and is force-admitted after maxWait or context expiry
-// so every node still gets a result (ruling: sweeps must complete). Each
+// to hand pages back, and is eligible for a rationed forced admission after
+// maxWait. Context cancellation defers without recording a probe result. Each
 // admission charges one presumed arena step against the line for chargeTTL —
 // the measured lifetime of a step — so a same-second burst self-serializes
 // even before the footprint sensor can see the first touch.
@@ -126,8 +126,7 @@ func defaultProbeAdmissionConfig() probeAdmissionConfig {
 // presumed steps plus this probe's own — fits under the ceiling, then records
 // this probe's charge. A waiter past maxWait competes for a rationed forced
 // exit (one per forcedInterval; the winner scavenges first). A waiter whose
-// own context dies passes through uncharged: its dial fails immediately and
-// allocates nothing, and the node still gets its result. A footprint sensor
+// own context dies is deferred without a charge or a fabricated result. A footprint sensor
 // reporting <= 0 (non-darwin hosts) admits immediately and uncharged: no
 // sensor, no pacing.
 func probeAdmissionWait(ctx context.Context, cfg probeAdmissionConfig) (waited time.Duration, verdict probeAdmissionVerdict) {
@@ -150,6 +149,9 @@ func probeAdmissionAdmit(ctx context.Context, cfg probeAdmissionConfig, backgrou
 	// same charge count and slip under the line together.
 	tryReserve := func(footprint int64) bool {
 		for {
+			if ctx.Err() != nil {
+				return false
+			}
 			charges := probeAdmissionCharges.Load()
 			if footprint+(charges+1)*cfg.stepBytes > cfg.ceilingBytes {
 				return false
@@ -163,6 +165,9 @@ func probeAdmissionAdmit(ctx context.Context, cfg probeAdmissionConfig, backgrou
 	// tryForcedSlot rations forced exits to one per forcedInterval.
 	tryForcedSlot := func() bool {
 		for {
+			if ctx.Err() != nil {
+				return false
+			}
 			last := probeAdmissionLastForcedNs.Load()
 			now := time.Now().UnixNano()
 			if now-last < int64(cfg.forcedInterval) {
@@ -175,7 +180,15 @@ func probeAdmissionAdmit(ctx context.Context, cfg probeAdmissionConfig, backgrou
 	}
 	start := time.Now()
 	for {
+		if ctx.Err() != nil {
+			return time.Since(start), probeDeferred
+		}
 		footprint := cfg.footprint()
+		// A sensor may take long enough for the caller to revoke its request.
+		// Do not turn that late reading into a new reservation.
+		if ctx.Err() != nil {
+			return time.Since(start), probeDeferred
+		}
 		if footprint <= 0 {
 			return time.Since(start), probeAdmitted
 		}
@@ -187,8 +200,16 @@ func probeAdmissionAdmit(ctx context.Context, cfg probeAdmissionConfig, backgrou
 				return time.Since(start), probeDeferred
 			}
 		} else if time.Since(start) >= cfg.maxWait && tryForcedSlot() {
+			if ctx.Err() != nil {
+				return time.Since(start), probeDeferred
+			}
 			if cfg.scavenge != nil {
 				cfg.scavenge()
+			}
+			if ctx.Err() != nil {
+				// Keep the consumed forced slot: refunding it could let another
+				// waiter bypass the existing ration. No probe charge was made.
+				return time.Since(start), probeDeferred
 			}
 			charge()
 			return time.Since(start), probeForced
