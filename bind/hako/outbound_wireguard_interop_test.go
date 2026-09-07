@@ -30,6 +30,7 @@ import (
 )
 
 func TestControlledWireGuardInterop(t *testing.T) {
+	pinUnifiedDelayOff(t)
 	const operationTimeout = 15 * time.Second
 
 	serverPrivate, serverPublic := generateControlledWireGuardKeyPair(t)
