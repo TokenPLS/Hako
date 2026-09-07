@@ -126,15 +126,24 @@ func isUpstreamEmptyRuleError(err error) bool {
 // tally.
 //
 // The docstring used to justify that by tracing the consumers ("ProviderMaterializer stores
-// it, ProvidersView renders it into a status string"). Those consumers do not exist: the
+// it, ProvidersView renders it into a status string"). Those consumers did not exist: the
 // consuming lane swept the whole export surface on 2026-08-09 and found zero references to
 // this function or to providerEntryCount anywhere in apple/. The reasoning was sound and the
 // premise was invented, which is the worse of the two failures -- a reader would have trusted
 // the tolerance conclusion because the chain looked traced.
 //
-// What can be said without inventing anything: nothing in this repository consumes the
-// return value, so no allocation is sized from it today. If a caller ever does size something
-// from it, bound it there -- this function returns the file's own claim, not a measurement.
+// 2026-09-05: half of that sweep has since gone stale, and the two halves have to be judged
+// separately or the correction repeats the original mistake in the other direction.
+//
+//   - "Zero references" is now FALSE. InspectProviderForIOS calls this as its first line, and
+//     the television reaches it through that wrapper (its materializer's coreInspector calls
+//     HakoInspectProviderForIOS).
+//   - "Nothing consumes the return value, so no allocation is sized from it" is still TRUE.
+//     gomobile renders (int, error) as (&count, &error) -> Bool, and that caller reads only
+//     the boolean; the count is passed an address and never looked at.
+//
+// So: there is a caller, and there is still no consumer of the number. If one ever does size
+// something from it, bound it there -- this returns the file's own claim, not a measurement.
 func ProviderEntryCountForIOS(kind, behavior, format string, payload []byte) (int, error) {
 	if len(payload) == 0 || len(payload) > maximumProviderResourceBytes {
 		return 0, bridgeSafeError(fmt.Errorf("hako: provider payload size is invalid"))
@@ -570,8 +579,15 @@ func validateClassicalEntryForApple(entry string, index int, capability applePro
 // providers. Switching profiles paid for all of it twice over.
 //
 // A payload that cannot be read has no count, so the pair collapses cleanly: an
-// error here is the same error validation used to report, and callers keep
-// treating a rule set they cannot read as a warning and a proxy set as fatal.
+// error here is the same error validation used to report.
+//
+// What the CALLER does with that error is the caller's, and it differs by platform:
+// on iOS a rule set that cannot be read is a warning and a proxy set is fatal, while
+// the television treats both as a warning and writes the payload anyway (its
+// materializer's outer catch is for a failed download, not a failed inspect). So an
+// age-armored payload the television cannot decrypt -- it does not copy iOS's
+// decryption -- leaves that one provider empty with a red line on its Providers page,
+// and the tunnel comes up. Do not read "fatal" here as a property of this function.
 func InspectProviderForIOS(kind, behavior, format string, payload []byte) (int, error) {
 	count, err := ProviderEntryCountForIOS(kind, behavior, format, payload)
 	if err == nil {

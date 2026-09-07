@@ -92,7 +92,8 @@ func TestPlanNoticesNameNoPlatform(t *testing.T) {
 
 func TestStructuredNoticesMirrorNoticesAndUseTheVocabulary(t *testing.T) {
 	known := map[string]bool{
-		planNoticeProviderFetchProxyStripped: true, planNoticeTunKnobStripped: true,
+		planNoticeProviderFetchProxyHonoured: true, planNoticeProviderFetchProxySelfReferential: true,
+		planNoticeTunKnobStripped:        true,
 		planNoticeEgressOverrideStripped: true, planNoticeProxyEgressOverrideStripped: true,
 		planNoticeFindProcessModeForcedOff: true, planNoticeMetadataRulesInert: true,
 		planNoticeDNSSystemResolverStripped: true, planNoticeDNSBootstrapReplaced: true,

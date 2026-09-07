@@ -72,16 +72,29 @@ type planNotice struct {
 // The notice vocabulary. A client keys its presentation on these; adding one is an API
 // change for the client lanes and a line in HAKO-SDK-REFERENCE.
 const (
-	planNoticeProviderFetchProxyStripped  = "provider-fetch-proxy-stripped"
-	planNoticeTunKnobStripped             = "tun-knob-stripped"
-	planNoticeEgressOverrideStripped      = "egress-override-stripped"
-	planNoticeProxyEgressOverrideStripped = "proxy-egress-override-stripped"
-	planNoticeFindProcessModeForcedOff    = "find-process-mode-forced-off"
-	planNoticeRouteSetInert               = "route-set-inert"
-	planNoticeMetadataRulesInert          = "metadata-rules-inert"
-	planNoticeDNSSystemResolverStripped   = "dns-system-resolver-stripped"
-	planNoticeDNSBootstrapReplaced        = "dns-bootstrap-replaced"
-	planNoticeDNSFragmentUnroutable       = "dns-fragment-unroutable"
+	// Renamed 2026-09-05 from provider-fetch-proxy-stripped: the field is no longer
+	// stripped, it is handed to the core ('s deferred-fetch path already existed for
+	// "the app has no local copy"; a named fetch proxy is now routed onto the same path
+	// rather than treated as a reason to strip it). Keeping the old string with new text
+	// would have a client render "we ignored your setting" for a field that is now
+	// honoured -- a rename is the honest choice, not renaming would be the lie.
+	planNoticeProviderFetchProxyHonoured = "provider-fetch-proxy-honoured"
+	// A provider naming ITSELF as its own fetch proxy is checkable at plan time from the
+	// document alone -- unlike "does the named proxy exist", which depends on what has
+	// loaded by the time this provider is fetched. Informational only: the core will
+	// reach the exact same "proxy %s not found" upstream would, this only says so before
+	// the fetch is attempted rather than after.
+	planNoticeProviderFetchProxySelfReferential = "provider-fetch-proxy-self-referential"
+	planNoticeTunKnobStripped                   = "tun-knob-stripped"
+	planNoticeEgressOverrideStripped            = "egress-override-stripped"
+	planNoticeProxyEgressOverrideStripped       = "proxy-egress-override-stripped"
+	planNoticeFindProcessModeForcedOff          = "find-process-mode-forced-off"
+	planNoticeRouteSetInert                     = "route-set-inert"
+	planNoticeMetadataRulesInert                = "metadata-rules-inert"
+	planNoticeDNSSystemResolverStripped         = "dns-system-resolver-stripped"
+	planNoticeDNSSystemResolverSubstituted      = "dns-system-resolver-substituted"
+	planNoticeDNSBootstrapReplaced              = "dns-bootstrap-replaced"
+	planNoticeDNSFragmentUnroutable             = "dns-fragment-unroutable"
 	// The kernel starts on every one of these. Each names the upstream line that
 	// tolerates the same input, so a reader can check the claim rather than trust it.
 	planNoticeProviderFileInert             = "provider-file-inert"
@@ -333,16 +346,32 @@ func httpProviders(root map[string]any, key, kind string) ([]planProvider, []pla
 					Text: key + "." + name + ": " + urlErr.Error() + "; the provider is not downloaded and everything else still starts"})
 			}
 			if proxy != "" {
-				// Fetch-egress selection only affects HOW the payload is
-				// downloaded, never which proxy serves user traffic. The iOS App
-				// resource downloader cannot dial through a named clash proxy, so
-				// the field is stripped (the App fetches directly; on failure the
-				// cached copy stays authoritative) and surfaced as a notice —
-				// tolerate + strip, the config still starts.
+				// Upstream's own vehicle dials through the named proxy
+				// (component/resource/vehicle.go:139, mihomoHttp.WithSpecialProxy);
+				// this used to be the one field this layer could not honour, because
+				// the app fetches before a core exists to route through. It no
+				// longer is: already gave every remote provider the app has no
+				// local copy of a path where the CORE fetches it once running, in the
+				// background. A named fetch proxy is routed onto that same path now —
+				// the app never attempts this one itself, at any budget — so the field
+				// reaches the core and the core dials through the proxy exactly as
+				// upstream would. The app-side materializer decides not to fetch it;
+				// nothing here has to ask it to.
 				// refusal-id: PlanResources.providerFetchProxy
-				notices = append(notices, planNotice{Kind: planNoticeProviderFetchProxyStripped, Field: key + "." + name + ".proxy", Value: proxy,
-					Text: key + "." + name + ".proxy: provider fetch proxy '" + proxy + "' is stripped (the app downloads providers directly; a failed refresh falls back to the cached copy)"})
-				proxy = ""
+				notices = append(notices, planNotice{Kind: planNoticeProviderFetchProxyHonoured, Field: key + "." + name + ".proxy", Value: proxy,
+					Text: key + "." + name + ".proxy: provider fetch proxy '" + proxy + "' is honoured; the core fetches this provider through it once the tunnel is running, and the app does not pre-download it"})
+				if proxy == name {
+					// The core resolves a fetch proxy at dial time by looking the name up
+					// in the live outbound table (tunnel.go resolveMetadata:
+					// proxies[metadata.SpecialProxy]) -- a provider's own key in
+					// proxy-providers is never an entry in that table, with or without this
+					// provider having loaded, so this can never resolve. Told before the
+					// fetch is attempted rather than only after; not a divergence -- the
+					// consequence and the wording are the core's own, quoted exactly.
+					// refusal-id: PlanResources.providerFetchProxySelfReferential
+					notices = append(notices, planNotice{Kind: planNoticeProviderFetchProxySelfReferential, Field: key + "." + name + ".proxy", Value: proxy,
+						Text: key + "." + name + ".proxy: names this same provider ('" + name + "') as its own fetch proxy; a provider is not itself a proxy, so the core will report \"proxy " + proxy + " not found\" and this provider never fetches"})
+				}
 			}
 			maximumBytes, limitErr := effectiveProviderMaximumBytes(def["size-limit"])
 			if limitErr != nil {

@@ -199,6 +199,17 @@ func Setup(options *SetupOptions) error {
 	// memory budget.
 	resource.DeferRemoteInitialFetch = true
 	resource.DefaultRemoteSizeLimit = int64(maximumProviderResourceBytes)
+	// tvOS reads this private cache to publish route snapshots, including while
+	// the tunnel is stopped. Never expose an in-place partial write to the App.
+	if err := resource.SetAtomicCacheDirectory(filepath.Join(options.WorkingPath, "tv-rule-cache")); err != nil {
+		return bridgeSafeError(err)
+	}
+	// The background download and parse a deferred provider does is the same
+	// peak the executor bounds to five on Apple hardware (
+	// hub/executor/concurrent_load_apple.go) -- it merely happens after Initial
+	// returned, outside that bound. Same number, for the same budget, on the
+	// work the first bound lets go of (2026-09-05 audit, F03).
+	resource.SetFirstLoadConcurrency(5)
 	if options.DisablePersistentCache {
 		if err := cachefile.DisablePersistentCache(); err != nil {
 			return bridgeSafeError(fmt.Errorf("hako: disable persistent cache: %w", err))

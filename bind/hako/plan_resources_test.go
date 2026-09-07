@@ -20,8 +20,9 @@ type planResult struct {
 		Kind, URL, Format, Path string
 		MaximumBytes            int64
 	} `json:"geodata"`
-	Notices []string                         `json:"notices"`
-	Errors  []struct{ Field, Reason string } `json:"errors"`
+	Notices           []string                         `json:"notices"`
+	StructuredNotices []planNotice                     `json:"structuredNotices"`
+	Errors            []struct{ Field, Reason string } `json:"errors"`
 }
 
 func TestPlanNamespacesSameNamedProxyAndRuleProviders(t *testing.T) {
@@ -491,10 +492,12 @@ func TestPlanProviderNameCannotEscapeCandidateDirectory(t *testing.T) {
 	}
 }
 
-func TestPlanCarriesHeadersAndStripsProviderProxy(t *testing.T) {
-	// A provider's fetch proxy only selects HOW the payload downloads, never
-	// which proxy serves user traffic — the App downloader fetches directly, so
-	// the field is stripped + noticed and the config still starts.
+// TestPlanCarriesHeadersAndHonoursProviderProxy: a fetch proxy is no longer stripped (
+// already lets the core fetch a provider the app has no local copy of; a named proxy is routed
+// onto that same path instead of being blanked). The app-side decision not to pre-download a
+// proxy-bound provider is not this function's to make or verify -- only that the field survives
+// into the plan unaltered, so the app HAS the value to act on.
+func TestPlanCarriesHeadersAndHonoursProviderProxy(t *testing.T) {
 	y := "rule-providers:\n  rules:\n    type: http\n    behavior: classical\n    url: https://example.com/r.yaml\n    proxy: Selected\n    header:\n      X-Token: secret\n      Accept:\n        - application/yaml\n"
 	r := planOf(t, y)
 	if len(r.Providers) != 1 {
@@ -506,17 +509,64 @@ func TestPlanCarriesHeadersAndStripsProviderProxy(t *testing.T) {
 	if len(r.Errors) != 0 {
 		t.Fatalf("provider fetch proxy must not be a plan error: %+v", r.Errors)
 	}
-	if r.Providers[0].Proxy != "" {
-		t.Fatalf("provider fetch proxy must be stripped from the download plan: %+v", r.Providers[0])
+	if r.Providers[0].Proxy != "Selected" {
+		t.Fatalf("provider fetch proxy must reach the plan unaltered so the core can dial through it, got: %+v", r.Providers[0])
 	}
 	noted := false
 	for _, n := range r.Notices {
-		if strings.Contains(n, ".proxy") && strings.Contains(n, "stripped") {
+		if strings.Contains(n, ".proxy") && strings.Contains(n, "honoured") {
 			noted = true
 		}
 	}
 	if !noted {
-		t.Fatalf("expected a stripped fetch-proxy notice, got: %v", r.Notices)
+		t.Fatalf("expected an honoured fetch-proxy notice, got: %v", r.Notices)
+	}
+	for _, n := range r.Notices {
+		if strings.Contains(n, "not itself a proxy") {
+			t.Fatalf("Selected does not name this provider -- the self-referential notice must not fire: %v", r.Notices)
+		}
+	}
+}
+
+// TestPlanNotesAProviderNamingItselfAsItsOwnFetchProxy: checkable from the document alone, at
+// plan time, with no knowledge of what has loaded -- a provider's own key in proxy-providers is
+// never itself an entry in the outbound table the core resolves a fetch proxy against
+// (tunnel.go resolveMetadata: proxies[metadata.SpecialProxy]), whether or not this provider has
+// fetched. Purely informational: this changes nothing the core does, upstream fails the same
+// dial the same way.
+func TestPlanNotesAProviderNamingItselfAsItsOwnFetchProxy(t *testing.T) {
+	y := "proxy-providers:\n  HK:\n    type: http\n    url: https://example.com/hk.yaml\n    proxy: HK\n"
+	r := planOf(t, y)
+	if len(r.Providers) != 1 || r.Providers[0].Proxy != "HK" {
+		t.Fatalf("provider fetch proxy must still reach the plan unaltered: %+v", r.Providers)
+	}
+	found := ""
+	for _, n := range r.Notices {
+		if strings.Contains(n, "not itself a proxy") {
+			found = n
+		}
+	}
+	if found == "" {
+		t.Fatalf("expected a self-referential fetch-proxy notice, got: %v", r.Notices)
+	}
+	// The consequence sentence is the core's own -- quoted, not paraphrased
+	// (tunnel/tunnel.go resolveMetadata: fmt.Errorf("proxy %s not found", ...)).
+	if !strings.Contains(found, `"proxy HK not found"`) {
+		t.Fatalf("notice must quote the core's own error text verbatim, got: %q", found)
+	}
+}
+
+// TestPlanDoesNotFlagASiblingProviderAsSelfReferential: the self-referential check is scoped to
+// a provider naming ITSELF, not to any name shared with a sibling provider -- a sibling's own
+// nodes may well have loaded by the time this one fetches, which is a real, working
+// configuration this notice must not discourage.
+func TestPlanDoesNotFlagASiblingProviderAsSelfReferential(t *testing.T) {
+	y := "proxy-providers:\n  HK:\n    type: http\n    url: https://example.com/hk.yaml\n  JP:\n    type: http\n    url: https://example.com/jp.yaml\n    proxy: HK\n"
+	r := planOf(t, y)
+	for _, n := range r.Notices {
+		if strings.Contains(n, "not itself a proxy") {
+			t.Fatalf("JP naming sibling provider HK as its fetch proxy is not self-reference: %v", r.Notices)
+		}
 	}
 }
 
