@@ -296,6 +296,20 @@ func normalizeRawConfigForApple(raw *config.RawConfig, policy appleRuntimePolicy
 		//
 		// Both are reasons to strip and warn. Neither is a reason to refuse the
 		// configuration, and nothing downstream does any more.
+		// Issue #21: when the App handed Setup the resolvers the OS listed before the
+		// tunnel came up, every system/dhcp entry becomes those resolvers instead of
+		// being stripped -- the strip below then finds nothing. A supplied address inside
+		// the tunnel's own ranges is the tunnel itself and is ignored, because a list
+		// that names the tunnel was read after the DNS settings applied.
+		if supplied := systemDNSServerSubstitutes(); len(supplied) != 0 {
+			usable, dropped := usableSystemResolverSubstitutes(supplied, tunnelPrefixesFromRaw(raw))
+			if len(dropped) != 0 {
+				log.Warnln("[Apple %s] DNS SystemDNSServerLines %s fall inside this configuration's own tunnel ranges and are ignored: the App read the system resolvers after the tunnel's DNS settings applied", policy.profile.String(), strings.Join(dropped, ", "))
+			}
+			for _, change := range substituteSystemResolvers(raw, usable) {
+				log.Warnln("[Apple %s] DNS %s %s resolves through the system resolvers the App read before the tunnel: %s", policy.profile.String(), change.where(), change.entry, strings.Join(usable, ", "))
+			}
+		}
 		for _, ns := range stripNEIncompatibleNameservers(raw) {
 			// "resolves back through NEDNSSettings" stood here until 2026-08-27 and
 			// described a loop upstream does not leave open. Measured on macOS 26.6.1,

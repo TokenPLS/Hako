@@ -105,6 +105,16 @@ type SetupOptions struct {
 	// produce the trigger counts that justify enabling it, instead of making users the
 	// experiment. See memoryThreshold* in the diagnostics for those counts.
 	MemoryPressureShed bool
+	// SystemDNSServerLines carries the resolvers the OS listed BEFORE the tunnel's DNS
+	// settings applied -- what SystemResolverLines() returns when the App calls it ahead of
+	// preapplying tunnel settings -- one per line: `ip`, `ip:port` or `[v6]:port`. Inside a
+	// packet tunnel a `system` or `dhcp://` nameserver otherwise resolves only to the tunnel's
+	// own address and answers nothing (issue #21), so each such entry is replaced, in place, by
+	// these resolvers, in every resolver slot including nameserver-policy values. Empty means
+	// no substitution: those entries are stripped, as before. Lines inside this configuration's
+	// own tunnel ranges are ignored with a warning (they mean the list was read too late). A
+	// line that is not an address fails Setup and leaves the previous list in force.
+	SystemDNSServerLines string
 }
 
 var (
@@ -166,6 +176,10 @@ func Setup(options *SetupOptions) error {
 	if err != nil {
 		return bridgeSafeError(err)
 	}
+	systemResolvers, err := parseSystemDNSServerLines(options.SystemDNSServerLines)
+	if err != nil {
+		return bridgeSafeError(fmt.Errorf("hako: SetupOptions.SystemDNSServerLines: %w", err))
+	}
 	if activeCoreCount.Load() > 0 && requestedRuntimeProfile != currentRuntimeProfile() {
 		return bridgeSafeError(fmt.Errorf(
 			"hako: changing RuntimeProfile from %q to %q requires restart",
@@ -182,6 +196,7 @@ func Setup(options *SetupOptions) error {
 	}
 	includeAllNetworksRequested.Store(options.IncludeAllNetworks)
 	sing_tun.IncludeAllNetworks = options.IncludeAllNetworks
+	systemDNSSubstitutes.Store(&systemResolvers)
 	startupPhase("setup:entered")
 	requestedCertificateStore, err := ca.ParseStore(options.CertificateStore)
 	if err != nil {

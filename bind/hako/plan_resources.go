@@ -857,7 +857,7 @@ func hardRejectErrors(root map[string]any, raw *config.RawConfig) ([]planError, 
 			// and a bootstrap left empty is refilled with mihomo's own defaults,
 			// so the only error left is a survivor mihomo itself refuses --
 			// hostless junk that fails its pure-IP check.
-			if _, _, rejected := defaultNameserverStrip(raw); rejected {
+			if _, _, rejected := defaultNameserverStrip(raw, usableSubstitutesForRoot(root)); rejected {
 				// refusal-id: PlanResources.bootstrapNameserver
 				out = append(out, planError{
 					Field:  "dns.default-nameserver",
@@ -893,7 +893,7 @@ func hardRejectErrors(root map[string]any, raw *config.RawConfig) ([]planError, 
 // case-sensitive comparison, missing the dhcp://system alias, missing that an
 // unknown scheme fails the parse). TestPlanAndRuntimeAgreeOnBootstrapShapes
 // drives both sides over the same inputs, so any residual divergence goes red.
-func defaultNameserverStrip(v any) (strip, repaired, rejected bool) {
+func defaultNameserverStrip(v any, substitutes []string) (strip, repaired, rejected bool) {
 	entries := []string{}
 	walkStrings(v, func(s string) { entries = append(entries, s) })
 	if len(entries) == 0 {
@@ -910,11 +910,18 @@ func defaultNameserverStrip(v any) (strip, repaired, rejected bool) {
 	// the original list verbatim, but repairApplePacketTunnelDNS then removes
 	// every NE-incompatible entry regardless, so the survivors are the same
 	// either way -- and an empty result is refilled with mihomo's defaults.
-	survivors := make([]string, 0, len(entries))
-	var hasBad bool
+	// With supplied system resolvers (issue #21) the first system/dhcp entry becomes
+	// them, exactly as substituteSystemResolvers does at runtime, so the survivors
+	// are pure IPs and the bootstrap is never refilled.
+	survivors := make([]string, 0, len(entries)+len(substitutes))
+	var hasBad, expanded bool
 	for _, s := range entries {
 		if isNEIncompatibleNameserver(s) {
 			hasBad = true
+			if len(substitutes) != 0 && !expanded {
+				survivors = append(survivors, substitutes...)
+				expanded = true
+			}
 			continue
 		}
 		survivors = append(survivors, s)
@@ -996,24 +1003,35 @@ func strippedDNSSchemeNotices(root map[string]any, policy appleRuntimePolicy) []
 		return nil
 	}
 	notices := []planNotice{}
+	// Issue #21: with the resolvers the App read before the tunnel, the entry is not
+	// stripped but replaced by them, and the notice says so -- the same verdict the
+	// runtime reaches over the same document (substituteSystemResolvers), including
+	// the drop of any supplied address that is the tunnel's own.
+	substitutes := usableSubstitutesForRoot(root)
+	systemEntry := func(field, v string) planNotice {
+		if len(substitutes) != 0 {
+			return planNotice{Kind: planNoticeDNSSystemResolverSubstituted, Field: "dns." + field, Value: v,
+				Text: "dns." + field + " '" + v + "' (system/dhcp) resolves through the system resolvers the App read before the tunnel: " + strings.Join(substitutes, ", ")}
+		}
+		return planNotice{Kind: planNoticeDNSSystemResolverStripped, Field: "dns." + field, Value: v,
+			Text: "dns." + field + " '" + v + "' (system/dhcp) is stripped inside a packet tunnel; resolution stays inside the core"}
+	}
 	for _, field := range []string{
 		"nameserver", "fallback", "proxy-server-nameserver", "direct-nameserver",
 		"nameserver-policy", "proxy-server-nameserver-policy",
 	} {
 		walkStrings(dns[field], func(v string) {
 			if isNEIncompatibleNameserver(v) {
-				notices = append(notices, planNotice{Kind: planNoticeDNSSystemResolverStripped, Field: "dns." + field, Value: v,
-					Text: "dns." + field + " '" + v + "' (system/dhcp) is stripped inside a packet tunnel; resolution stays inside the core"})
+				notices = append(notices, systemEntry(field, v))
 			}
 		})
 	}
-	strip, repaired, _ := defaultNameserverStrip(dns["default-nameserver"])
+	strip, repaired, _ := defaultNameserverStrip(dns["default-nameserver"], substitutes)
 	switch {
 	case strip:
 		walkStrings(dns["default-nameserver"], func(v string) {
 			if isNEIncompatibleNameserver(v) {
-				notices = append(notices, planNotice{Kind: planNoticeDNSSystemResolverStripped, Field: "dns.default-nameserver", Value: v,
-					Text: "dns.default-nameserver '" + v + "' (system/dhcp) is stripped inside a packet tunnel; resolution stays inside the core"})
+				notices = append(notices, systemEntry("default-nameserver", v))
 			}
 		})
 	case repaired:
