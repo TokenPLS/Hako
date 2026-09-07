@@ -134,6 +134,40 @@ rule-providers:
 	}
 }
 
+// a provider with a fetch proxy is never pre-downloaded, at any budget, so the app never
+// has a path to hand FinalizeForIOS for it. This is the other half of that decision, proven
+// rather than assumed: this function needed NO new code for it. rewriteProviders' existing
+// !found branch already left a provider's WHOLE definition untouched whenever the resourceMap
+// has no path for it (the app has no copy at activation, or a host it could not reach) --
+// 's pre-existing reason for that branch to exist -- and a provider the app has decided not
+// to attempt is indistinguishable from one it merely failed to reach. `proxy` survives for the
+// same reason `url` does: nothing here special-cases it.
+func TestFinalizeLeavesAProxyBoundProviderRemoteForTheCoreToFetch(t *testing.T) {
+	y := "proxy-providers:\n  air:\n    type: http\n    url: https://example.com/air.yaml\n    proxy: HK\n    interval: 3600\n"
+	// No entry for "air" in providerPaths: the app decided not to fetch this one.
+	out, err := FinalizeForIOS(y, `{"providerPaths":{}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal([]byte(out.Value), &document); err != nil {
+		t.Fatal(err)
+	}
+	provider := document["proxy-providers"].(map[string]any)["air"].(map[string]any)
+	if provider["type"] != "http" {
+		t.Fatalf("a provider the app never staged must stay remote for the core to fetch, got type=%v", provider["type"])
+	}
+	if provider["proxy"] != "HK" {
+		t.Fatalf("the fetch proxy must reach the core verbatim so it can dial through it, got: %+v", provider)
+	}
+	if provider["url"] != "https://example.com/air.yaml" {
+		t.Fatalf("the url the core will fetch from must survive too, got: %+v", provider)
+	}
+	if _, staged := provider["path"]; staged {
+		t.Fatalf("a provider the core will fetch itself must not carry a local path: %+v", provider)
+	}
+}
+
 func TestFinalizePreservesUnsupportedTunIntentForPreflight(t *testing.T) {
 	y := "tun:\n  auto-redirect: true\n  stack: gvisor\n"
 	out, err := FinalizeForIOS(y, "{}")
@@ -195,6 +229,32 @@ func TestFinalizeMarksOrdinaryRuleProviderSideUpdateSafe(t *testing.T) {
 	}
 }
 
+func TestInertRouteReferencesKeepOrdinaryRuleSideUpdates(t *testing.T) {
+	for _, behavior := range []string{"domain", "classical"} {
+		for _, field := range []string{"route-address-set", "route-exclude-address-set"} {
+			t.Run(behavior+"/"+field, func(t *testing.T) {
+				input := "rule-providers:\n  ordinary:\n    type: http\n    behavior: " + behavior +
+					"\n    url: https://rules.example.test/rules.yaml\ntun:\n  " + field + ": [ordinary]\n"
+				out, err := FinalizeForIOS(input, `{}`)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var document map[string]any
+				if err := yaml.Unmarshal([]byte(out.Value), &document); err != nil {
+					t.Fatal(err)
+				}
+				provider := document["rule-providers"].(map[string]any)["ordinary"].(map[string]any)
+				if safe, _ := provider[providerSideUpdateSafeField].(bool); !safe {
+					t.Fatal("a rule set that contributes no platform routes must remain eligible for background rule updates")
+				}
+				if _, exists := document["tun"].(map[string]any)[field]; exists {
+					t.Fatal("inert route reference survived finalization")
+				}
+			})
+		}
+	}
+}
+
 func TestFinalizeReadsCandidateButWritesPublishedProviderPath(t *testing.T) {
 	dir := t.TempDir()
 	staging := filepath.Join(dir, ".tmp-revision", "providers", "cn.yaml")
@@ -239,6 +299,54 @@ func TestFinalizeSkipsMissingRouteSetCandidate(t *testing.T) {
 	}
 	if strings.Contains(out.Value, "missing") {
 		t.Fatalf("the skipped set still reached the core:\n%s", out.Value)
+	}
+}
+
+// The reader's OpenClash template (2026-09-06): tun.route-exclude-address-set names an http
+// ipcidr set, and since phase two a switch that cannot fetch it leaves no file and no
+// path. Upstream reads a route set from the loaded provider and a provider that has not loaded
+// contributes nothing while the tun comes up (listener/sing_tun/server.go), so a set the App
+// has no bytes for is inert here too -- the tunnel starts without its routes, the provider
+// stays remote for the core's own first load, and the App's first-load retry republishes with
+// the routes expanded once it has the bytes.
+func TestFinalizeSkipsARouteSetTheAppHasNoBytesFor(t *testing.T) {
+	y := `
+rule-providers:
+  cn_ip: {type: http, behavior: ipcidr, format: mrs, url: https://example.com/cn_ip.mrs, interval: 86400}
+tun:
+  route-exclude-address-set: [cn_ip]
+`
+	out, err := FinalizeForIOS(y, `{}`)
+	if err != nil {
+		t.Fatalf("a route set the App has no bytes for is inert, not fatal: %v", err)
+	}
+	for _, key := range []string{"route-exclude-address-set", "route-exclude-address"} {
+		if strings.Contains(out.Value, key) {
+			t.Fatalf("%s reached the core although nothing could be expanded:\n%s", key, out.Value)
+		}
+	}
+	var document map[string]any
+	if err := yaml.Unmarshal([]byte(out.Value), &document); err != nil {
+		t.Fatal(err)
+	}
+	provider := document["rule-providers"].(map[string]any)["cn_ip"].(map[string]any)
+	if provider["type"] != "http" || provider["url"] != "https://example.com/cn_ip.mrs" {
+		t.Fatalf("the provider must stay remote so the core loads its rules half itself, got %+v", provider)
+	}
+}
+
+// 's real cases stay refused: a path the App did map but that is not a readable regular
+// file is the App's bug (it wrote no such file), and must fail loud rather than go inert.
+func TestFinalizeStillRefusesAMappedRouteSetFileThatIsNotThere(t *testing.T) {
+	y := `
+rule-providers:
+  cn_ip: {type: http, behavior: ipcidr, format: mrs, url: https://example.com/cn_ip.mrs}
+tun:
+  route-exclude-address-set: [cn_ip]
+`
+	_, err := FinalizeForIOS(y, `{"providerPaths":{"cn_ip":"`+filepath.Join(t.TempDir(), "never-written.mrs")+`"}}`)
+	if err == nil || !strings.Contains(err.Error(), "read route-exclude-address-set provider") {
+		t.Fatalf("a mapped path nobody wrote must still refuse, got %v", err)
 	}
 }
 

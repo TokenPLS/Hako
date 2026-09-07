@@ -445,3 +445,25 @@ var (
 	bundledGeoDataDir      = filepath.Join(clientTreeRoot, "Resources", "Bundled"+"GeoData")
 	realSubscriptionCorpus = filepath.Join(clientTreeRoot, "Tests", "Fixtures", "config-corpus")
 )
+
+// The no-bytes route set cannot ride the table above: that harness writes a placeholder file
+// for every provider, which's "unreadable" case and is rightly refused. The shape the
+// reader hit -- defined, ipcidr, no file and no path -- must survive activation itself, not
+// merely Finalize, for the same reason the table exists (see the note on it).
+func TestARouteSetTheAppHasNoBytesForSurvivesActivation(t *testing.T) {
+	const configYAML = `
+proxies:
+  - {name: n, type: ss, server: example.com, port: 8388, cipher: aes-128-gcm, password: p}
+rule-providers:
+  cn_ip: {type: http, behavior: ipcidr, format: mrs, url: https://example.com/cn_ip.mrs}
+tun:
+  route-exclude-address-set: [cn_ip]
+`
+	finalized, err := FinalizeForIOS(configYAML, `{}`)
+	if err != nil {
+		t.Fatalf("Finalize refused a route set the App has no bytes for: %v", err)
+	}
+	if _, _, err := parseConfigForIOSRuntime(finalized.Value, true, "gate"); err != nil {
+		t.Fatalf("Finalize accepted it, but the activation path refused it: %v", err)
+	}
+}

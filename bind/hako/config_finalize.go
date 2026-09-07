@@ -115,7 +115,11 @@ func annotateRuleProviderSideUpdateSafety(root map[string]any, platformRouteProv
 		if typeName != "file" && typeName != "http" {
 			continue
 		}
-		definition[providerSideUpdateSafeField] = !platformRouteProviders[name]
+		// expandRouteSet ignores non-ipcidr strategies, as upstream updateRule
+		// does. An inert reference must not disable ordinary rule side-updates.
+		behavior, _ := definition["behavior"].(string)
+		changesPlatformRoutes := platformRouteProviders[name] && strings.EqualFold(behavior, "ipcidr")
+		definition[providerSideUpdateSafeField] = !changesPlatformRoutes
 	}
 }
 
@@ -311,7 +315,21 @@ func expandRouteSet(tun map[string]any, setKey, destKey string, paths map[string
 				return pathErr
 			}
 			if !found {
-				return fmt.Errorf("%s provider %q was not materialized", setKey, name)
+				// The App has no bytes for this set on this side: it switched while the
+				// set's host was unreachable, and since phase two it then leaves no
+				// file and no path (the provider stays remote and the core loads its
+				// fail-closed", written when the App still pre-downloaded every set;
+				// with the reader's OpenClash template it refused the whole profile on
+				// every switch in a walled network. Upstream reads a route set from the
+				// loaded provider and one that has not loaded contributes nothing while
+				// the tun comes up (listener/sing_tun/server.go), so the set is inert
+				// here too. The consequence is stated in the log line below: the tunnel
+				// starts WITHOUT these routes; the App's first-load retry republishes the
+				// revision with them expanded once it has the bytes, and a running tunnel
+				// gains them at its next start (a side-update of a route set is refused by
+				// design, provider_runtime.go sideUpdateSafe)..
+				skipped = append(skipped, name+" (no local copy yet: the tunnel starts without its routes and gains them at its next start, once the App's first-load retry has the bytes)")
+				continue
 			}
 			entries, err = readCIDRs(path, spec.format)
 		}
