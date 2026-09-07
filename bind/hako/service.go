@@ -634,6 +634,7 @@ func runGuardedTeardown(teardown func()) {
 // and the Network Extension now relies on that for in-process restart.
 func (s *BoxService) Close() error {
 	s.stopSTUNSessions()
+	s.releasePauseOnClose()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	unpublishCoreService(s)
@@ -990,6 +991,37 @@ func (s *BoxService) SetMode(mode string) error {
 // endPauseTimeout is sing-box's value for the same timer (experimental/libbox/command_server.go
 // arms time.AfterFunc(time.Minute, ...)).
 const endPauseTimeout = time.Minute
+
+// releasePauseOnClose undoes what Pause armed, so a service that is gone cannot go on acting
+// on the process-wide pause manager.
+//
+// Two things were never released here, and "disconnect on sleep" delivers exactly the sequence
+// that exposes both: the system calls sleep() (Pause), and moments later, while the device is
+// still asleep, stopTunnel (Close).
+//
+//  1. The iOS backstop timer. armEndPauseTimer arms a one-minute time.AfterFunc(pause.DeviceWake)
+//     so a wake that never arrives cannot strand the core paused. Close never stopped it, so it
+//     went on running against a *BoxService that no longer existed and called the bare,
+//     receiver-less pause.DeviceWake() up to a minute later regardless.
+//  2. The pause itself. component/pause's manager is process-wide by construction (the device is
+//     asleep or it is not), so a service closed while paused left it paused for whatever ran
+//     next -- a reconnect inside that window inherited a manager it never asked to be in, and its
+//     own health checks would not run until the stray timer above eventually fired.
+//
+// pauseCount > wakeCount is this service's own record of a Pause with no matching Wake, checked
+// so Close only releases a pause THIS service made -- never a device-wide pause some other live
+// service is still holding.
+func (s *BoxService) releasePauseOnClose() {
+	s.endPauseMu.Lock()
+	if s.endPauseTimer != nil {
+		s.endPauseTimer.Stop()
+	}
+	s.endPauseMu.Unlock()
+
+	if s.pauseCount.Load() > s.wakeCount.Load() {
+		pause.DeviceWake()
+	}
+}
 
 func (s *BoxService) Pause() {
 	s.pauseCount.Add(1)
